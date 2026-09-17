@@ -25,8 +25,9 @@ python3 scripts/bmoe-serve.py -m ~/llm/models/LFM2.5-8B-A1B-UD-Q4_K_M.gguf \
 
 What the bridge does with client fields:
 
-- `messages` are flattened to a single user prompt (system messages kept inline); the engine
-  renders its own chat template over its own conversation history (`--chatml` required).
+- `messages` are forwarded verbatim to the engine when the conversation is plain text (see
+  *Session residency* below); non-text content falls back to the flattened single-prompt path.
+  `--chatml` makes the engine render the model's own GGUF-embedded chat template.
 - `max_tokens` (default 2048 — thinking models spend completion tokens on reasoning) becomes
   `n_predict`, and is **clamped to the bridge's `--max-tokens` ceiling**: a client asking for
   more output than fits beside its prompt would otherwise sit in the n_ctx window for tens of
@@ -60,6 +61,27 @@ so decoding after a mid-sequence rewind fails outright (`llama_decode: failed to
 first seen as dead LFM2.5 sessions the moment a client rewrote its history). Those models
 re-prefill every turn — the pre-residency behavior — while keeping the engine-held conversation,
 and a cancelled turn likewise forces the next turn's full re-prefill there.
+
+## Warmup: the first query is cheap too
+
+Residency helps from the second turn on; the **warmup** moves the first turn's cost to server
+start. After each request the bridge saves the stable prefix — everything but the in-flight user
+turn — to `~/.cache/bmoe-serve/warmup.json` (mode 0600; it holds conversation contents). At
+startup the bridge replays that prefix through the messages path as short prefill-only segments
+(`n_predict=0`), so the model's own template renders what the next session will send and the
+engine holds it resident before any client connects. A client's first query then diffs against
+the warm prefix and prefills only its own delta.
+
+The design is speculative-safe by construction: if the next session sends a different system
+prompt, tool schema or repo map, the residency diff truncates at the first divergence and only
+the mismatched tail is prefilled — a mismatch wastes compute, never correctness. The saved prefix
+is keyed to the model file, so switching models skips the replay, and `--no-warmup` disables it.
+Segments release the engine lock between segments, so a request arriving mid-warmup preempts the
+rest without losing what is already resident.
+
+For observability the bridge prints one `TELEMETRY` line per request to its log — `n_prompt`,
+`n_reused`, `tokens`, `prefill_s`, `tok_s`, `wall_s`, … — because agent clients (aider, opencode)
+discard the perf block.
 
 ## Memory budget on the host
 

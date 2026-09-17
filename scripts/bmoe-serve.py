@@ -188,6 +188,70 @@ class Engine:
 
 engine = None
 model_id = "bmoe-local"
+model_file = ""
+
+# Warmup: the stable conversation prefix (system + tool schemas + history) is saved after
+# every request and replayed as prefill-only segments when the server starts. The engine's
+# residency diff makes this speculative-safe: if a client later sends a different prefix,
+# the diff just cuts at the first divergence — worst case is wasted compute, never a wrong
+# answer. Plain-prompt requests can't use it (they clear KV unconditionally), so warmup
+# replay always goes through the messages path.
+WARMUP_FILE = Path.home() / ".cache" / "bmoe-serve" / "warmup.json"
+WARMUP_SEGMENT_CHARS = 1200  # ~300 tokens: a segment is short enough that a real request waits seconds, not minutes
+
+
+def save_warmup(messages):
+    """Persist everything but the last message (the in-flight user turn) as the next
+    session's warm prefix. The last message is deliberately excluded: dropping it costs
+    one message's prefill next session, while caching it would speculate on a message
+    that edits/retries may replace."""
+    if not messages or len(messages) < 2:
+        return
+    prefix = [{"role": m.get("role", "user"), "content": m.get("content", "")} for m in messages[:-1]]
+    if not any(m["content"] for m in prefix):
+        return
+    try:
+        WARMUP_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = WARMUP_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"model": model_file, "messages": prefix}))
+        tmp.replace(WARMUP_FILE)
+        os.chmod(WARMUP_FILE, 0o600)  # the file holds conversation contents
+    except OSError as e:
+        print(f"[bmoe-serve] warmup save failed: {e}", flush=True)
+
+
+def warmup_engine():
+    """Replay the saved prefix into KV before any client connects. Runs in segments that
+    each release the engine lock, so a real request arriving mid-warmup waits one segment,
+    preempts the rest, and still keeps everything the segments already made resident."""
+    try:
+        d = json.loads(WARMUP_FILE.read_text())
+    except (OSError, json.JSONDecodeError, ValueError):
+        return
+    msgs = d.get("messages") or []
+    if d.get("model") != model_file or not msgs or to_engine_messages(msgs) is None:
+        return
+    print(f"[bmoe-serve] warming KV cache: replaying {len(msgs)} prefix messages", flush=True)
+    t0 = time.time()
+    i = seg = 0
+    while i < len(msgs):
+        j, chars = i, 0
+        while j < len(msgs) and (j == i or chars < WARMUP_SEGMENT_CHARS):
+            c = msgs[j].get("content", "")
+            chars += len(c) if isinstance(c, str) else 0
+            j += 1
+        # The trailing dummy user turn gives the render a completion; the next segment's
+        # diff diverges exactly there, so the dummy itself is never kept resident.
+        seg_msgs = msgs[:j] + [{"role": "user", "content": "(warmup)"}]
+        try:
+            for _ in engine.request("", 0, messages=seg_msgs):
+                pass  # n_predict=0: prefill only, nothing to stream
+        except (EngineError, EngineFatal) as e:
+            print(f"[bmoe-serve] warmup stopped at segment {seg + 1}: {e}", flush=True)
+            return
+        i, seg = j, seg + 1
+        print(f"[bmoe-serve] warmup segment {seg}: {j}/{len(msgs)} messages resident ({time.time() - t0:.0f}s)", flush=True)
+    print(f"[bmoe-serve] warmup complete: prefix resident in {time.time() - t0:.0f}s", flush=True)
 
 
 def flatten_messages(messages):
@@ -313,6 +377,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def run_generation(self, prompt, n_predict, messages=None):
         """Iterate the engine, mapping deltas to (reasoning, text); cancels on client loss."""
+        started = time.time()
+        done = {}  # terminal BMOE_DONE of the attempt that actually finished
 
         def _iter(np):
             reasoning, text = [], []
@@ -323,6 +389,7 @@ class Handler(BaseHTTPRequestHandler):
                 if t:
                     text.append(t)
                 yield "".join(reasoning), "".join(text), p
+            done.update(getattr(engine, "last_done", {}))
 
         try:
             yield from _iter(n_predict)
@@ -339,6 +406,19 @@ class Handler(BaseHTTPRequestHandler):
             fallback = max(256, n_predict // 2)
             print(f"[bmoe-serve] {e}; retrying with n_predict={fallback}", flush=True)
             yield from _iter(fallback)
+        finally:
+            # One greppable line per finished request. Agent clients (aider, opencode)
+            # discard the bmoe telemetry block, and this is where residency shows up:
+            # n_reused (KV served from cache) vs n_prompt (tokens actually prefilled).
+            if done:
+                keep = ("n_prompt", "n_reused", "tokens", "prefill_s", "prefill_tps",
+                        "tok_s", "cache_hit_pct", "io_s_tok", "stall_s_tok", "cancelled")
+                line = {k: done[k] for k in keep if k in done}
+                line["wall_s"] = round(time.time() - started, 1)
+                line["msgs"] = len(messages) if messages else 0
+                print(f"[bmoe-serve] TELEMETRY {json.dumps(line, separators=(',', ':'))}", flush=True)
+                if messages and not line.get("cancelled"):
+                    save_warmup(messages)
 
     def handle_stream(self, req, prompt, n_predict, created, messages=None):
         cid = f"chatcmpl-{int(time.time() * 1000)}"
@@ -426,7 +506,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    global engine, model_id, max_tokens_limit
+    global engine, model_id, max_tokens_limit, model_file
     ap = argparse.ArgumentParser(description="OpenAI-compatible bridge over bmoe-cli --session")
     ap.add_argument("--engine", default=None,
                     help="engine binary; default: $BMOE_ENGINE, else the host build, else a bmoe-cli beside this script")
@@ -438,6 +518,8 @@ def main():
     ap.add_argument("--max-tokens", type=int, default=2048,
                     help="ceiling for any request's completion budget; larger client values are clamped to this")
     ap.add_argument("--ready-timeout", type=float, default=120.0)
+    ap.add_argument("--no-warmup", action="store_true",
+                    help="skip replaying the saved conversation prefix into KV at startup")
     ap.add_argument("--engine-args", default="",
                     help="extra engine args as one quoted string, e.g. '--moe-stream --ctx-size 4096'")
     args = ap.parse_args()
@@ -474,9 +556,12 @@ def main():
     model_path = Path(model_path).expanduser()
     if not model_path.is_file():
         sys.exit(f"[bmoe-serve] model not found: {model_path}")
+    model_file = str(model_path)
 
     engine_args = shlex.split(args.engine_args)
     engine = Engine(str(engine_path), str(model_path), engine_args, args.ready_timeout)
+    if not args.no_warmup:
+        threading.Thread(target=warmup_engine, daemon=True).start()
 
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"[bmoe-serve] OpenAI-compatible endpoint: http://{args.host}:{args.port}/v1", flush=True)
