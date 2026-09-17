@@ -54,6 +54,13 @@ a few hundred tokens instead of the whole conversation. `BMOE_DONE` reports this
 (KV prefix carried over) alongside `n_prompt` (tokens actually prefilled this turn). Conversations
 with image parts or non-text content fall back to the flattened one-shot prompt path.
 
+**Hybrid/recurrent architectures (lfm2moe, qwen35moe, …) are excluded from prefix reuse:** a
+partial `seq_rm` rewinds positions but not the per-sequence cell state carried in the same memory,
+so decoding after a mid-sequence rewind fails outright (`llama_decode: failed to decode, ret = 2`,
+first seen as dead LFM2.5 sessions the moment a client rewrote its history). Those models
+re-prefill every turn — the pre-residency behavior — while keeping the engine-held conversation,
+and a cancelled turn likewise forces the next turn's full re-prefill there.
+
 ## Memory budget on the host
 
 Compute buffers are reserved for the widest graph, and the dominant term scales with

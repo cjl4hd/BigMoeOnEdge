@@ -8,7 +8,12 @@ Semantic Versioning.
 
 ### Added
 
-- **Session residency: engine-side multi-turn conversations** (`feat/session-residency`). A
+- **Session residency: engine-side multi-turn conversations** (`feat/session-residency`).
+  **Hybrid/recurrent architectures (lfm2moe, qwen35moe, …) are excluded:** a partial `seq_rm`
+  rewinds positions but not the per-sequence cell state, so decoding after a mid-sequence rewind
+  fails (`llama_decode: failed to decode, ret = 2`); those models re-prefill every turn (the
+  pre-residency behavior) while keeping their engine-held `chat_history`. A
+  `generate` request may carry a `messages` array (role/content pairs) alongside — or instead of —
   `generate` request may carry a `messages` array (role/content pairs) alongside — or instead of —
   the flat `prompt`: the engine renders its chat template over the client-owned conversation and
   reuses the KV prefix of the longest common history, prefilling only the diverging suffix. This

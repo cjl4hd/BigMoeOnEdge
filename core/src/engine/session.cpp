@@ -1310,6 +1310,21 @@ RunResult Session::generate(const GenerateRequest & req,
     // kv_tokens empty, so n_common = 0 and this reduces to a full prefill — the one-shot path the
     // byte-identity gates exercise stays unchanged.
     size_t n_common = 0;
+    // Hybrid/recurrent stacks (lfm2moe, qwen35moe, …) keep per-sequence cell state in the same
+    // memory as the KV. A partial seq_rm rewinds positions but not the cells, so decoding after a
+    // mid-sequence rewind fails outright ("llama_decode: failed to decode, ret = 2") — observed on
+    // LFM2.5 the first time a turn diverged from a resident prefix. Worse, a FAILED or CANCELLED
+    // turn leaves that poison behind with kv_tokens already empty (the mirror only grows on
+    // success), so the poison is invisible to any condition keyed on the mirror — it surfaced as a
+    // ret=2 cascade where even a fresh conversation died at pos 0. Prefix reuse is therefore
+    // transformer-only, and the sweep is UNCONDITIONAL: every hybrid turn starts from a truly
+    // clean memory, whatever the previous turn did. chat_history is kept because the next render
+    // still needs the earlier turns.
+    if (llama_model_is_hybrid(im.model.get()) || llama_model_is_recurrent(im.model.get())) {
+        llama_memory_clear(llama_get_memory(ctx), true);
+        if (im.ctx_dft) llama_memory_clear(llama_get_memory(im.ctx_dft.get()), true);
+        im.kv_tokens.clear();
+    }
     if (chat_on && !im.kv_tokens.empty()) {
         const size_t max_common = tokens.size() > 0 ? tokens.size() - 1 : 0;
         while (n_common < im.kv_tokens.size() && n_common < max_common && im.kv_tokens[n_common] == tokens[n_common])

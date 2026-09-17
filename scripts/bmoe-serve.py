@@ -25,6 +25,7 @@ from pathlib import Path
 
 ENGINE_READY = "BMOE_READY"
 ENGINE_BEGIN = "BMOE_BEGIN"
+ENGINE_LOAD = "BMOE_LOAD"
 ENGINE_PROGRESS = "BMOE_PROGRESS"
 ENGINE_DONE = "BMOE_DONE"
 ENGINE_ERROR = "BMOE_ERROR"
@@ -90,6 +91,16 @@ class Engine:
         except (BrokenPipeError, OSError, AttributeError):
             pass
 
+    def _drain_after_cancel(self, timeout=30.0):
+        """A cancelled generation still owes a terminal protocol line — and the engine may
+        be blocked mid-write with a full stdout pipe. Only a reader unblocks it: discard
+        everything until BMOE_DONE/BMOE_ERROR (or EOF) so the next request starts clean."""
+        deadline = time.time() + timeout
+        while self.alive() and time.time() < deadline:
+            line = self._readline()
+            if line is None or line.startswith(("BMOE_DONE", "BMOE_ERROR")):
+                return
+
     def request(self, prompt, n_predict, think=True, messages=None):
         """Yield ('progress', dict) events; the caller consumes until the generator ends.
         Raises EngineError (recoverable) or EngineFatal (restart needed)."""
@@ -110,40 +121,53 @@ class Engine:
         else:
             payload["prompt"] = prompt
             payload["clear_kv"] = True
-        with self._lock:
-            if not self.alive():
-                raise EngineFatal("engine process is not running")
-            try:
-                self._write_line(json.dumps(payload))
-            except (BrokenPipeError, OSError):
-                raise EngineFatal("engine stdin is closed")
-            while True:
-                line = self._readline()
-                if line is None:
-                    raise EngineFatal("engine closed stdout mid-generation")
-                if not line.startswith("BMOE_"):
-                    continue
-                event, _, rest = line.partition(" ")
-                if event == ENGINE_PROGRESS:
-                    try:
-                        p = json.loads(rest)
-                    except json.JSONDecodeError:
+        terminal = False
+        try:
+            with self._lock:
+                if not self.alive():
+                    raise EngineFatal("engine process is not running")
+                try:
+                    self._write_line(json.dumps(payload))
+                except (BrokenPipeError, OSError):
+                    raise EngineFatal("engine stdin is closed")
+                while True:
+                    line = self._readline()
+                    if line is None:
+                        raise EngineFatal("engine closed stdout mid-generation")
+                    if not line.startswith("BMOE_"):
                         continue
-                    yield p
-                elif event == ENGINE_DONE:
-                    try:
-                        self.last_done = json.loads(rest)
-                    except json.JSONDecodeError:
-                        self.last_done = {}
-                    return
-                elif event == ENGINE_ERROR:
-                    try:
-                        e = json.loads(rest)
-                    except json.JSONDecodeError:
-                        e = {"msg": rest}
-                    if e.get("fatal"):
-                        raise EngineFatal(e.get("msg", "fatal engine error"))
-                    raise EngineError(e.get("msg", "engine error"))
+                    event, _, rest = line.partition(" ")
+                    if event == ENGINE_PROGRESS:
+                        try:
+                            p = json.loads(rest)
+                        except json.JSONDecodeError:
+                            continue
+                        yield p
+                    elif event not in (ENGINE_BEGIN, ENGINE_LOAD):
+                        try:
+                            e = json.loads(rest)
+                        except json.JSONDecodeError:
+                            e = {"msg": rest}
+                        # A turn abandoned without a cancel handshake delivers its terminal
+                        # line late; drop foreign ids so it can't satisfy this request.
+                        eid = e.get("id") if isinstance(e, dict) else None
+                        if eid not in (None, 0, rid):
+                            continue
+                        terminal = True
+                        if event == ENGINE_DONE:
+                            self.last_done = e
+                            return
+                        if e.get("fatal"):
+                            raise EngineFatal(e.get("msg", "fatal engine error"))
+                        raise EngineError(e.get("msg", "engine error"))
+        finally:
+            if not terminal:
+                # Client vanished mid-generation. Cancel AND drain: the engine is
+                # single-threaded, so once its stdout pipe fills with unread progress
+                # lines it can never read the cancel — only a reader unblocks it.
+                # Skipping this wedge-d the whole bridge on the first client disconnect.
+                self.cancel()
+                self._drain_after_cancel()
 
     def stop(self):
         if self.proc is None:
@@ -284,6 +308,8 @@ class Handler(BaseHTTPRequestHandler):
             if not self.headers.get("Content-Length") or stream:
                 pass  # headers already sent; report as an SSE error below if possible
             self.send_json(502, {"error": {"message": str(e)}})
+        except OSError:
+            pass  # client socket died mid-response (EPIPE/ECONNRESET); engine already cancelled
 
     def run_generation(self, prompt, n_predict, messages=None):
         """Iterate the engine, mapping deltas to (reasoning, text); cancels on client loss."""
@@ -356,9 +382,9 @@ class Handler(BaseHTTPRequestHandler):
             # without `choices` — the perf block rides only non-streaming responses.
             self.wfile.write(b"data: [DONE]\n\n")
             self.wfile.flush()
-        except (EngineError, EngineFatal, BrokenPipeError) as e:
-            if isinstance(e, BrokenPipeError):
-                return  # client is gone; nothing to report
+        except (EngineError, EngineFatal, OSError) as e:
+            if isinstance(e, OSError):
+                return  # client is gone (EPIPE / ECONNRESET); nothing to report
             try:
                 self.wfile.write(sse({"error": {"message": str(e)}}))
                 self.wfile.write(b"data: [DONE]\n\n")
