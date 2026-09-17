@@ -76,7 +76,12 @@ static const MoeRecipe k_recipes[] = {
     // resident-side details lower the streamed fraction: the router applies a per-expert bias
     // (ffn_exp_probs_b, the lfm2moe pattern) and there is one always-on shared expert (ffn_*_shexp)
     // that stays mmap-resident. No leading dense blocks — see docs/limitations.md.
-    // bailingmoe2 (inclusionAI Ling-mini/Ling-lite 2.0, 16.5B-~1.4B / 16.8B-2.75B active) is a
+    // olmoe (allenai OLMoE-1B-7B, 6.9B total / 0.99B active) is the smallest supported MoE and a
+    // pure attention stack — not in llama.cpp's hybrid list, so conversation residency applies.
+    // 64 routed experts at top-8 name the standard split suffixes and nothing else is exotic: no
+    // shared expert, no router bias, no leading dense blocks.
+    {"olmoe", {"ffn_gate_exps", "ffn_up_exps", "ffn_down_exps"}},
+    // bailingmoe2 (inclusionAI Ling-mini-2.0 / Ling-lite-2.0, 16.5B-~1.4B / 16.8B-2.75B active) is a
     // pure attention stack — not in llama.cpp's hybrid list, so conversation residency applies.
     // 256 routed experts name the standard split suffixes; one always-on shared expert
     // (ffn_*_shexp) and a per-expert router bias (ffn_exp_probs_b) stay resident, mirroring the
