@@ -62,6 +62,16 @@ struct SessionConfig {
 // remembering to touch both. n_batch = n_ctx so any prompt that fits the context prefills in one batch.
 SessionConfig session_config_from(const RunConfig & cfg);
 
+// One message of a client-supplied conversation. A request that carries `messages` replaces the
+// engine's conversation state wholesale: the engine renders its chat template over the full array
+// and reuses whatever KV prefix survives the diff (compaction, edits and retries reduce to the
+// same truncate-and-extend path). One conversation state lives in the engine; an HTTP bridge stays
+// stateless by forwarding its client's array verbatim every turn.
+struct ChatTurn {
+    std::string role;    // "system", "user", "assistant" — validated against the template
+    std::string content;
+};
+
 // How a GenerateRequest::think=false request can be honoured on THIS model. Decided once at
 // open() by rendering the model's own chat template, never from a list of model names.
 //
@@ -84,6 +94,10 @@ const char * think_control_name(ThinkControl c);
 // expert cache stays warm; clear_kv=false continues the KV cache for multi-turn chat.
 struct GenerateRequest {
     std::string prompt;
+    // Client-owned conversation. When non-empty, `prompt` is ignored and the full array is
+    // rendered over; history after the turn is replaced by the client's version on the next
+    // request, so the assistant reply is never double-appended.
+    std::vector<ChatTurn> messages;
     int n_predict = 32;
     bool think = true;
     bool clear_kv = true;

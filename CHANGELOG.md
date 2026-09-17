@@ -4,6 +4,23 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project aims to follow
 Semantic Versioning.
 
+## [0.24.2] - 2026-09-16
+
+### Added
+
+- **Session residency: engine-side multi-turn conversations** (`feat/session-residency`). A
+  `generate` request may carry a `messages` array (role/content pairs) alongside — or instead of —
+  the flat `prompt`: the engine renders its chat template over the client-owned conversation and
+  reuses the KV prefix of the longest common history, prefilling only the diverging suffix. This
+  makes a stateless HTTP bridge (or any OpenAI-style client) cheap on the second turn: appending
+  one message re-prefills a few hundred tokens instead of the whole conversation, while compaction,
+  edited messages and retries reduce to the same truncate-and-extend path — no cache-coherence
+  logic anywhere, because every request carries the authoritative history. `BMOE_DONE` gains
+  `n_reused` (KV prefix carried over) so `prefill_tps` stays honest under reuse; `bmoe-serve.py`
+  forwards plain-text OpenAI conversations verbatim (non-text content falls back to the flattened
+  prompt path). The assistant commit is skipped for client-history turns: the next request carries
+  the authoritative array, so appending the reply would only diverge from it.
+
 ## [0.24.1] - 2026-09-16
 
 ### Added

@@ -90,7 +90,7 @@ class Engine:
         except (BrokenPipeError, OSError, AttributeError):
             pass
 
-    def request(self, prompt, n_predict, think=True):
+    def request(self, prompt, n_predict, think=True, messages=None):
         """Yield ('progress', dict) events; the caller consumes until the generator ends.
         Raises EngineError (recoverable) or EngineFatal (restart needed)."""
         rid = self._next_id
@@ -98,11 +98,18 @@ class Engine:
         payload = {
             "cmd": "generate",
             "id": rid,
-            "prompt": prompt,
             "n_predict": n_predict,
             "think": think,
-            "clear_kv": True,
         }
+        if messages:
+            # Client-owned conversation: the engine renders its chat template over the array
+            # and reuses the KV prefix from prior turns (session residency), so the second
+            # turn's prefill covers only the diverging suffix.
+            payload["messages"] = messages
+            payload["clear_kv"] = False
+        else:
+            payload["prompt"] = prompt
+            payload["clear_kv"] = True
         with self._lock:
             if not self.alive():
                 raise EngineFatal("engine process is not running")
@@ -191,6 +198,26 @@ def tail_past(prev, cur):
     return cur[i:]
 
 
+def to_engine_messages(messages):
+    """Translate OpenAI messages to the engine's session array, or None when the conversation
+    is not plain text (exotic content parts) and must fall back to the flattened prompt."""
+    out = []
+    for m in messages:
+        if not isinstance(m, dict) or not isinstance(m.get("role"), str):
+            return None
+        c = m.get("content")
+        if isinstance(c, str):
+            out.append({"role": m["role"], "content": c})
+        elif isinstance(c, list) and all(
+            isinstance(p, dict) and p.get("type") == "text" and isinstance(p.get("text"), str)
+            for p in c
+        ):
+            out.append({"role": m["role"], "content": "".join(p["text"] for p in c)})
+        else:
+            return None
+    return out or None
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -244,25 +271,26 @@ class Handler(BaseHTTPRequestHandler):
         # OpenAI clients treat max_tokens as a ceiling, so clamping is behavior-preserving.
         n_predict = min(int(req.get("max_tokens") or req.get("max_completion_tokens") or max_tokens_limit), max_tokens_limit)
         stream = bool(req.get("stream", False))
-        prompt = flatten_messages(messages)
+        conversation = to_engine_messages(messages)
+        prompt = flatten_messages(messages)  # fallback path when content is not plain text
         created = int(time.time())
 
         try:
             if stream:
-                self.handle_stream(req, prompt, n_predict, created)
+                self.handle_stream(req, prompt, n_predict, created, messages=conversation)
             else:
-                self.handle_plain(req, prompt, n_predict, created)
+                self.handle_plain(req, prompt, n_predict, created, messages=conversation)
         except EngineFatal as e:
             if not self.headers.get("Content-Length") or stream:
                 pass  # headers already sent; report as an SSE error below if possible
             self.send_json(502, {"error": {"message": str(e)}})
 
-    def run_generation(self, prompt, n_predict):
+    def run_generation(self, prompt, n_predict, messages=None):
         """Iterate the engine, mapping deltas to (reasoning, text); cancels on client loss."""
 
         def _iter(np):
             reasoning, text = [], []
-            for p in engine.request(prompt, np):
+            for p in engine.request(prompt, np, messages=messages):
                 r, t = p.get("delta_reasoning", ""), p.get("delta_text", "")
                 if r:
                     reasoning.append(r)
@@ -286,7 +314,7 @@ class Handler(BaseHTTPRequestHandler):
             print(f"[bmoe-serve] {e}; retrying with n_predict={fallback}", flush=True)
             yield from _iter(fallback)
 
-    def handle_stream(self, req, prompt, n_predict, created):
+    def handle_stream(self, req, prompt, n_predict, created, messages=None):
         cid = f"chatcmpl-{int(time.time() * 1000)}"
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
@@ -309,7 +337,7 @@ class Handler(BaseHTTPRequestHandler):
             # The engine yields cumulative text; the wire protocol wants DELTAS, so send
             # only the tail past what this stream has already sent.
             sent_r = sent_t = ""
-            for reasoning, text, _ in self.run_generation(prompt, n_predict):
+            for reasoning, text, _ in self.run_generation(prompt, n_predict, messages):
                 delta = {}
                 if len(reasoning) > len(sent_r):
                     delta["reasoning_content"] = tail_past(sent_r, reasoning)
@@ -338,10 +366,10 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 pass
 
-    def handle_plain(self, req, prompt, n_predict, created):
+    def handle_plain(self, req, prompt, n_predict, created, messages=None):
         try:
             reasoning, text = "", ""
-            for reasoning, text, _ in self.run_generation(prompt, n_predict):
+            for reasoning, text, _ in self.run_generation(prompt, n_predict, messages):
                 pass
         except (EngineError, EngineFatal) as e:
             self.send_json(502, {"error": {"message": str(e)}})

@@ -39,6 +39,21 @@ What the bridge does with client fields:
   hit, stall) — the same numbers the CSV sink records. The SSE stream emits only OpenAI-shaped
   chunks: strict client SDKs validate every event, so no vendor-specific events ride the stream.
 
+## Session residency: second turns are cheap
+
+Plain-text conversations are forwarded to the engine **verbatim** (`messages` array, not the
+flattened string), so the engine owns the conversation state and the bridge stays stateless. The
+engine renders its chat template over the full array each turn and keeps the KV prefix of the
+longest common conversation — compaction, edited messages and retries reduce to the same
+truncate-and-extend path, and no cache-coherence logic exists anywhere because every request
+carries the authoritative history.
+
+The effect on a prefill-bound host is the whole point: the first turn prefills everything, and
+every following turn prefills **only the new tokens** — a turn that appends one message re-prefills
+a few hundred tokens instead of the whole conversation. `BMOE_DONE` reports this as `n_reused`
+(KV prefix carried over) alongside `n_prompt` (tokens actually prefilled this turn). Conversations
+with image parts or non-text content fall back to the flattened one-shot prompt path.
+
 ## Memory budget on the host
 
 Compute buffers are reserved for the widest graph, and the dominant term scales with

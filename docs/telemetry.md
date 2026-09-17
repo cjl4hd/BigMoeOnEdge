@@ -512,7 +512,7 @@ BMOE_BEGIN {"id":<int>}                                                # a gener
 BMOE_LOAD / BMOE_PROGRESS ...                                          # per token, as above
 BMOE_DONE  {"id":<int>,"cancelled":<bool>,"tokens":<int>,"tok_s":<float>,
             "prefill_s":<float>,"prefill_tps":<float>,"load_s":<float>,"cache_hit_pct":<float>,
-            "n_prompt":<int>,"n_past":<int>,"compute_s_tok":<float>,"io_s_tok":<float>,
+            "n_prompt":<int>,"n_past":<int>,"n_reused":<int>,"compute_s_tok":<float>,"io_s_tok":<float>,
             "cache_resident_mib":<float>,"cache_budget_mib":<float>,"read_mib":<float>,
             "stall_s_tok":<float>,"mgmt_s_tok":<float>,"majflt_tok":<float>,"cpu_s_tok":<float>,
             "prefill_cpu_s":<float>,"prefill_read_mib":<float>,"prefill_io_s":<float>,
@@ -522,6 +522,13 @@ BMOE_DONE  {"id":<int>,"cancelled":<bool>,"tokens":<int>,"tok_s":<float>,
             "reasoning":"<string>","text":"<string>"}
 BMOE_ERROR {"id":<int>,"fatal":<bool>,"msg":"<string>"}
 ```
+
+`n_reused` is the KV prefix carried over from the prior turn — `n_past` minus what this turn added
+(suffix prefill plus generated tokens), `0` on a one-shot prompt or the first turn of a session.
+Requests that carry a `messages` array (client-owned conversation) get it from the engine's
+residency: the template renders over the full array, the longest common prefix against the resident
+KV is kept, and only the diverging suffix is prefilled — `n_prompt` counts those suffix tokens only,
+so `prefill_tps` stays honest under reuse. See [serve.md](serve.md) for the bridge wiring.
 
 `BMOE_DONE`'s `mtp_*` keys are the self-speculation counters (all `0` without speculation, and the
 same keys whichever source drafted): `mtp_accepted / mtp_drafted` is the acceptance on that turn,

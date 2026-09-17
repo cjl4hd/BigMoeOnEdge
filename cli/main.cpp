@@ -213,11 +213,89 @@ static bool json_get_bool(const std::string & line, const char * key, bool dflt)
     return line.compare(p, 4, "true") == 0;
 }
 
+// Read a double-quoted string starting at line[p] (which must be '"'), handling the protocol's
+// escape set the same way json_get_string does, and advancing p past the closing quote.
+static bool json_read_string_at(const std::string & line, size_t & p, std::string & out) {
+    if (p >= line.size() || line[p] != '"') return false;
+    ++p;
+    std::string raw;
+    for (; p < line.size(); ++p) {
+        if (line[p] == '\\' && p + 1 < line.size()) {
+            raw += line[p];
+            raw += line[p + 1];
+            ++p;
+        } else if (line[p] == '"') {
+            out = json_unescape(raw);
+            ++p; // past the closing quote: callers keep scanning from here
+            return true;
+        } else {
+            raw += line[p];
+        }
+    }
+    return false;
+}
+
+// Parse a `"messages":[{"role":..., "content":...}, ...]` array into turns. The session protocol
+// hand-rolls its JSON (see the helpers above), so this is the same brace-matching scanner in the
+// same style: walk objects, match quoted keys, reuse the escape-aware string reader. Returns false
+// only when the key exists but does not parse — a missing key or an empty array means the request
+// is a plain-prompt one.
+static bool json_get_messages(const std::string & line, const char * key, std::vector<ChatTurn> & out) {
+    out.clear();
+    size_t p = json_value_pos(line, key);
+    if (p == std::string::npos) return true; // absent key: plain-prompt request
+    while (p < line.size() && (line[p] == ' ' || line[p] == '\t'))
+        ++p;
+    if (p >= line.size() || line[p] != '[') return false;
+    ++p;
+    for (;;) {
+        while (p < line.size() && (line[p] == ' ' || line[p] == '\t' || line[p] == ','))
+            ++p;
+        if (p >= line.size()) return false;
+        if (line[p] == ']') break;
+        if (line[p] != '{') return false;
+        ++p;
+        ChatTurn turn;
+        bool have_role = false, have_content = false;
+        for (;;) {
+            while (p < line.size() && (line[p] == ' ' || line[p] == '\t' || line[p] == ','))
+                ++p;
+            if (p >= line.size()) return false;
+            if (line[p] == '}') {
+                ++p;
+                break;
+            }
+            if (line[p] != '"') return false;
+            std::string k;
+            if (!json_read_string_at(line, p, k)) return false;
+            while (p < line.size() && (line[p] == ' ' || line[p] == '\t'))
+                ++p;
+            if (p >= line.size() || line[p] != ':') return false;
+            ++p;
+            while (p < line.size() && (line[p] == ' ' || line[p] == '\t'))
+                ++p;
+            std::string v;
+            if (!json_read_string_at(line, p, v)) return false;
+            if (k == "role") {
+                turn.role = std::move(v);
+                have_role = true;
+            } else if (k == "content") {
+                turn.content = std::move(v);
+                have_content = true;
+            }
+        }
+        if (have_role && have_content)
+            out.push_back(std::move(turn));
+    }
+    return true;
+}
+
 // A parsed stdin command. cancel is handled inline by the reader thread (it calls
 // Session::cancel directly), so only generate/close travel through the queue.
 struct SessionCmd {
     enum Kind { kGenerate, kClose } kind;
     std::string prompt;
+    std::vector<ChatTurn> messages; // client-owned conversation; empty = prompt-only request
     int id = 0;
     int n_predict = 128;
     bool think = true;
@@ -276,6 +354,13 @@ static int run_session_loop(const RunConfig & cfg,
                 c.kind = SessionCmd::kGenerate;
                 json_get_string(line, "prompt", c.prompt);
                 c.id = json_get_int(line, "id", 0);
+                if (!json_get_messages(line, "messages", c.messages)) {
+                    // The id is parseable even when the array is not, so the error is routable.
+                    std::printf("BMOE_ERROR {\"id\":%d,\"fatal\":false,\"msg\":\"malformed messages array\"}\n",
+                                c.id);
+                    std::fflush(stdout);
+                    continue;
+                }
                 c.n_predict = json_get_int(line, "n_predict", cfg.n_predict);
                 c.think = json_get_bool(line, "think", cfg.think);
                 c.clear_kv = json_get_bool(line, "clear_kv", true);
@@ -291,7 +376,9 @@ static int run_session_loop(const RunConfig & cfg,
         {
             std::lock_guard<std::mutex> lk(mtx);
             stop.store(true);
-            queue.push_back({SessionCmd::kClose, "", 0, 0, true, true});
+            SessionCmd close;
+            close.kind = SessionCmd::kClose;
+            queue.push_back(std::move(close));
         }
         cv.notify_one();
     });
@@ -312,6 +399,7 @@ static int run_session_loop(const RunConfig & cfg,
 
         GenerateRequest req;
         req.prompt = cmd.prompt;
+        req.messages = std::move(cmd.messages);
         req.n_predict = cmd.n_predict;
         req.think = cmd.think;
         req.clear_kv = cmd.clear_kv;
@@ -334,8 +422,12 @@ static int run_session_loop(const RunConfig & cfg,
             continue;
         }
         const RunSummary & s = r.summary;
+        // n_reused: KV prefix carried over from the prior turn, i.e. n_past minus what THIS turn
+        // added (suffix prefill + generated tokens). 0 on a one-shot prompt, where n_past is exactly
+        // n_prompt + generated. Paired with n_prompt (tokens actually prefilled) it makes the
+        // prefill_tps figure honest under residency.
         std::printf("BMOE_DONE {\"id\":%d,\"cancelled\":%s,\"tokens\":%d,\"tok_s\":%.3f,\"prefill_s\":%.3f,"
-                    "\"prefill_tps\":%.2f,\"load_s\":%.3f,\"cache_hit_pct\":%.1f,\"n_prompt\":%d,\"n_past\":%d,"
+                    "\"prefill_tps\":%.2f,\"load_s\":%.3f,\"cache_hit_pct\":%.1f,\"n_prompt\":%d,\"n_past\":%d,\"n_reused\":%d,"
                     "\"compute_s_tok\":%.4f,\"io_s_tok\":%.4f,\"cache_resident_mib\":%.0f,\"cache_budget_mib\":%.0f,"
                     "\"read_mib\":%.1f,\"stall_s_tok\":%.4f,\"mgmt_s_tok\":%.4f,\"majflt_tok\":%.2f,\"cpu_s_tok\":%.4f,"
                     "\"prefill_cpu_s\":%.3f,\"prefill_read_mib\":%.1f,\"prefill_io_s\":%.3f,"
@@ -345,7 +437,8 @@ static int run_session_loop(const RunConfig & cfg,
                     "\"reasoning\":\"%s\",\"text\":\"%s\"}\n",
                     cmd.id, r.cancelled ? "true" : "false", s.n_generated, s.tokens_per_second, s.prefill_seconds,
                     (s.prefill_seconds > 0 ? s.n_prompt / s.prefill_seconds : 0.0), s.load_seconds, s.cache_hit_pct,
-                    s.n_prompt, s.n_past, s.moe_compute_s_per_token, s.moe_io_s_per_token, s.cache_resident_mib,
+                    s.n_prompt, s.n_past, s.n_past - s.n_generated - s.n_prompt,
+                    s.moe_compute_s_per_token, s.moe_io_s_per_token, s.cache_resident_mib,
                     s.cache_budget_mib, s.moe_read_mib, s.moe_stall_s_per_token, s.moe_mgmt_s_per_token,
                     s.majflt_per_token, s.cpu_s_per_token, s.prefill_cpu_seconds, s.prefill_read_mib,
                     s.prefill_io_seconds, s.prefill_stall_seconds, s.prefill_mgmt_seconds, s.token_demand_mib,

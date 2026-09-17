@@ -1204,16 +1204,30 @@ RunResult Session::generate(const GenerateRequest & req,
     // reasoning is stripped from the shown answer. req.think drives enable_thinking, per prompt.
     std::string prompt = req.prompt;
     bool chat_on = im.chat_on;
+    // Client-owned history (GenerateRequest::messages) replaces the engine's conversation state
+    // wholesale, and the assistant commit below is skipped for such turns: the authoritative
+    // history is whatever the client sends next, so appending would just diverge from it.
+    bool client_history = !req.messages.empty();
     bool history_pushed = false;   // did we append this turn's user message to chat_history?
     bool prefilled_answer = false; // closed the reasoning span in the prompt, so skip reasoning parse
     common_chat_parser_params parse_params;
     if (chat_on) {
         try {
-            common_chat_msg user_msg;
-            user_msg.role = "user";
-            user_msg.content = req.prompt;
-            im.chat_history.push_back(user_msg);
-            history_pushed = true;
+            if (client_history) {
+                im.chat_history.clear();
+                for (const ChatTurn & t : req.messages) {
+                    common_chat_msg m;
+                    m.role = t.role;
+                    m.content = t.content;
+                    im.chat_history.push_back(std::move(m));
+                }
+            } else {
+                common_chat_msg user_msg;
+                user_msg.role = "user";
+                user_msg.content = req.prompt;
+                im.chat_history.push_back(user_msg);
+                history_pushed = true;
+            }
 
             common_chat_templates_inputs inputs;
             inputs.messages = im.chat_history; // the full conversation, not just this turn
@@ -1873,13 +1887,15 @@ RunResult Session::generate(const GenerateRequest & req,
         // Undo the whole turn (KV, fed tokens, and the pushed user message) so the conversation
         // is left exactly as it was before this prompt and stays continuable.
         rollback_turn();
-    } else if (chat_on) {
+    } else if (chat_on && !client_history) {
         // Commit the assistant turn to the running conversation. Parsing separates a thinking
         // model's reasoning from the answer; the next turn re-renders history from these messages.
         // Reuses the parse above. A prefilled turn has no turn header in the stream to parse — the
         // generation is the answer verbatim — and is committed without the prefill, so history holds
         // a normal assistant message and the next turn re-renders cleanly whatever this turn's think
-        // setting was. A parse that threw falls back the same way.
+        // setting was. A parse that threw falls back the same way. A client-history turn skips this:
+        // the next request carries the authoritative array, and appending the reply would diverge
+        // from it.
         common_chat_msg assistant;
         if (final_parsed)
             assistant = std::move(final_msg);
