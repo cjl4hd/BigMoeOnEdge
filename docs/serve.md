@@ -6,15 +6,18 @@ agent tooling — opencode, or anything that speaks the OpenAI Chat Completions 
 bridge wraps that protocol in an OpenAI-compatible HTTP endpoint, without adding an HTTP stack
 or any dependency to the engine itself.
 
-- `scripts/bmoe-serve.py` — stdlib-only Python bridge: spawns `bmoe-cli --session`, translates
-  `POST /v1/chat/completions` (streaming and not) and `GET /v1/models` onto the line protocol,
-  and keeps the model loaded between requests so the expert cache stays warm.
-- `scripts/run-server.sh` — launcher that resolves the engine and a model file:
+- `scripts/bmoe-serve.py` — stdlib-only Python bridge and the single entry point: spawns
+  `bmoe-cli --session`, translates `POST /v1/chat/completions` (streaming and not) and
+  `GET /v1/models` onto the line protocol, and keeps the model loaded between requests so the
+  expert cache stays warm. It resolves engine and model itself (`--engine`/`--model`, else
+  `$BMOE_ENGINE`/`$BMOE_MODEL`, else the host build of a repo checkout, else a `bmoe-cli`
+  sitting beside the script in a staged bundle), with friendly errors instead of a raw
+  subprocess failure.
 
 ```bash
-scripts/run-server.sh -m ~/llm/models/LFM2.5-8B-A1B-UD-Q4_K_M.gguf \
+python3 scripts/bmoe-serve.py -m ~/llm/models/LFM2.5-8B-A1B-UD-Q4_K_M.gguf \
     --model-id lfm2.5-8b-a1b --port 8017 \
-    --engine-args "--chatml --moe-stream --ctx-size 4096 --ubatch 512"
+    --engine-args "--chatml --moe-stream --ctx-size 16384 --ubatch 512"
 ```
 
 `BMOE_ENGINE` overrides the engine binary, e.g. a cross-built ARM64 bundle. Point `--host
@@ -25,10 +28,16 @@ What the bridge does with client fields:
 - `messages` are flattened to a single user prompt (system messages kept inline); the engine
   renders its own chat template over its own conversation history (`--chatml` required).
 - `max_tokens` (default 2048 — thinking models spend completion tokens on reasoning) becomes
-  `n_predict`; reasoning arrives separately in `reasoning_content`, streamed or not.
+  `n_predict`, and is **clamped to the bridge's `--max-tokens` ceiling**: a client asking for
+  more output than fits beside its prompt would otherwise sit in the n_ctx window for tens of
+  minutes. OpenAI clients treat `max_tokens` as a ceiling, so clamping is behavior-preserving.
+  If a request still overflows `n_ctx`, the bridge retries once with the budget halved
+  (floor 256) rather than failing — and if the prompt alone overflows, the error surfaces,
+  because that genuinely needs a shorter conversation.
 - Requests are serialised: the engine is one session, one generation at a time.
-- Every response carries a `bmoe` object with the `BMOE_DONE` perf block (tok/s, cache hit,
-  stall) — the same numbers the CSV sink records.
+- Non-streaming responses carry a `bmoe` object with the `BMOE_DONE` perf block (tok/s, cache
+  hit, stall) — the same numbers the CSV sink records. The SSE stream emits only OpenAI-shaped
+  chunks: strict client SDKs validate every event, so no vendor-specific events ride the stream.
 
 ## Memory budget on the host
 
@@ -38,6 +47,33 @@ enough to OOM-kill the session the first time a generation ran with ~4 GiB free.
 caps the reservation at ~258 MiB and leaves decode speed untouched (only prefill splits into
 more graphs). On RAM-constrained hosts, keep `--ubatch 512` and let `--cache-mb auto` size the
 expert cache to what is left.
+
+## Prefill is the wall on small hardware
+
+Prompt processing (prefill) is compute-bound, and on modest CPUs it dwarfs everything else:
+a 2015 dual-core laptop measured **~20 tok/s**, so an agent client that re-sends its multi-
+thousand-token system prompt pays minutes before the first token. The engine-side knobs do
+not move it — decode threads (2 vs 4), `--ubatch` 256/512/1024, and the CPU governor all
+land within run-to-run noise; `--n-expert-used` does, but it drops the model's real routing
+and answer quality with it (a benchmark knob, not a service one). The lever that works is
+shrinking what the client sends, which is a client configuration problem:
+
+- Set the model's real limits so agent clients compact before overflowing
+  (`context` deliberately below the engine's `--ctx-size` to leave output headroom):
+
+```jsonc
+"lfm2.5-8b-a1b": {
+  "name": "LFM2.5-8B-A1B (bmoe streamed)",
+  "limit": { "context": 12288, "output": 2048 }
+}
+```
+
+- Prefer a minimal agent profile: a ~100-token custom prompt instead of the client's full
+  agent stack, and fewer enabled tools — every enabled tool's schema rides in the prompt on
+  every request. In opencode that is a `"mode": "primary"` agent with a short `prompt`, the
+  mutating tools disabled, and the bmoe model pinned.
+- Keep conversations short: clients re-send the whole history each turn, and `/new` is
+  cheaper than any cache.
 
 ## ARM64 Linux bundles
 
@@ -58,4 +94,5 @@ Android build — Android binaries link bionic and only run on Android. See the 
 
 Configuring the client (opencode) is a user-level concern, not a repo one: add an
 `@ai-sdk/openai-compatible` provider pointing at `http://127.0.0.1:8017/v1`, either per project
-or in `~/.config/opencode/opencode.json` for every session.
+or in `~/.config/opencode/opencode.json` for every session, and give the model the `limit`
+from the prefill section above.

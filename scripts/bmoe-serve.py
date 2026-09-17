@@ -6,11 +6,14 @@
 # OpenAI /v1/chat/completions (streaming and not) and /v1/models onto that protocol, and keeps
 # the model loaded between requests so the expert cache stays warm.
 #
-# Requires: python3 (stdlib only). Start it with scripts/run-server.sh, which also points the
-# engine at a model.
+# Requires: python3 (stdlib only). One entry point, no launcher: it resolves the engine
+# (--engine, else $BMOE_ENGINE, else the host build of a repo checkout, else a bundled
+# bmoe-cli beside this script) and the model (--model, else $BMOE_MODEL, else the tiny
+# test model a host build produced).
 
 import argparse
 import json
+import os
 import shlex
 import signal
 import subprocess
@@ -18,6 +21,7 @@ import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 ENGINE_READY = "BMOE_READY"
 ENGINE_BEGIN = "BMOE_BEGIN"
@@ -234,8 +238,12 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         # Generous default: thinking models spend completion tokens on reasoning before the
-        # answer, and agent clients that never send max_tokens would otherwise get truncated.
-        n_predict = int(req.get("max_tokens") or req.get("max_completion_tokens") or 2048)
+        # Agents never send max_tokens need a generous default, and thinking models spend
+        # completion tokens on reasoning before answering — but the budget is still clamped
+        # to the ceiling below: a huge client max_tokens would otherwise sit in the n_ctx
+        # window (or, after the overflow retry, generate for tens of minutes). OpenAI
+        # clients treat max_tokens as a ceiling, so clamping is behavior-preserving.
+        n_predict = min(int(req.get("max_tokens") or req.get("max_completion_tokens") or max_tokens_limit), max_tokens_limit)
         stream = bool(req.get("stream", False))
         prompt = flatten_messages(messages)
         created = int(time.time())
@@ -252,18 +260,32 @@ class Handler(BaseHTTPRequestHandler):
 
     def run_generation(self, prompt, n_predict):
         """Iterate the engine, mapping deltas to (reasoning, text); cancels on client loss."""
-        reasoning, text = [], []
-        try:
-            for p in engine.request(prompt, n_predict):
+
+        def _iter(np):
+            reasoning, text = [], []
+            for p in engine.request(prompt, np):
                 r, t = p.get("delta_reasoning", ""), p.get("delta_text", "")
                 if r:
                     reasoning.append(r)
                 if t:
                     text.append(t)
                 yield "".join(reasoning), "".join(text), p
+
+        try:
+            yield from _iter(n_predict)
         except GeneratorExit:
             engine.cancel()
             raise
+        except EngineError as e:
+            # Agent clients routinely request more output than fits beside their prompt.
+            # A shorter answer beats a failed request: halve the completion budget once
+            # (floor 256) and retry. If the prompt alone overflows, the retry fails too
+            # and the error surfaces — that genuinely needs a shorter conversation.
+            if "exceeds the session n_ctx" not in str(e) or n_predict <= 256:
+                raise
+            fallback = max(256, n_predict // 2)
+            print(f"[bmoe-serve] {e}; retrying with n_predict={fallback}", flush=True)
+            yield from _iter(fallback)
 
     def handle_stream(self, req, prompt, n_predict, created):
         cid = f"chatcmpl-{int(time.time() * 1000)}"
@@ -302,7 +324,9 @@ class Handler(BaseHTTPRequestHandler):
             done = getattr(engine, "last_done", {})
             finish = "length" if done.get("tokens", 0) >= n_predict else "stop"
             self.wfile.write(sse(chunk({}, finish)))
-            self.wfile.write(sse({"id": cid, "bmoe": done}))
+            # No vendor-specific events here: strict client SDKs (the AI SDK behind opencode)
+            # validate every SSE payload against the OpenAI chunk schema and reject anything
+            # without `choices` — the perf block rides only non-streaming responses.
             self.wfile.write(b"data: [DONE]\n\n")
             self.wfile.flush()
         except (EngineError, EngineFatal, BrokenPipeError) as e:
@@ -349,21 +373,57 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    global engine, model_id
+    global engine, model_id, max_tokens_limit
     ap = argparse.ArgumentParser(description="OpenAI-compatible bridge over bmoe-cli --session")
-    ap.add_argument("--engine", default="build/cli/bmoe-cli", help="engine binary path")
-    ap.add_argument("--model", required=True, help="gguf path for the engine")
+    ap.add_argument("--engine", default=None,
+                    help="engine binary; default: $BMOE_ENGINE, else the host build, else a bmoe-cli beside this script")
+    ap.add_argument("-m", "--model", default=None,
+                    help="gguf path; default: $BMOE_MODEL, else the tiny test model from a host build")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8017)
     ap.add_argument("--model-id", default="bmoe-local", help="model name reported to clients")
+    ap.add_argument("--max-tokens", type=int, default=2048,
+                    help="ceiling for any request's completion budget; larger client values are clamped to this")
     ap.add_argument("--ready-timeout", type=float, default=120.0)
     ap.add_argument("--engine-args", default="",
                     help="extra engine args as one quoted string, e.g. '--moe-stream --ctx-size 4096'")
     args = ap.parse_args()
     model_id = args.model_id
+    max_tokens_limit = args.max_tokens
+
+    here = Path(__file__).resolve().parent
+
+    engine_path = args.engine or os.environ.get("BMOE_ENGINE")
+    if engine_path is None:
+        # Repo checkout first (scripts/ sits one level under the root), then a bundle where
+        # this script was staged next to bmoe-cli.
+        for candidate in (here.parent / "build/cli/bmoe-cli", here / "bmoe-cli"):
+            if candidate.is_file():
+                engine_path = candidate
+                break
+        else:
+            sys.exit("[bmoe-serve] no engine found — build with scripts/build-host.sh or pass --engine")
+    engine_path = Path(engine_path).expanduser()
+    if not engine_path.is_file():
+        sys.exit(f"[bmoe-serve] engine not found: {engine_path}")
+    if not os.access(engine_path, os.X_OK):
+        sys.exit(f"[bmoe-serve] engine is not executable: {engine_path}")
+
+    model_path = args.model or os.environ.get("BMOE_MODEL")
+    if model_path is None:
+        tiny = here.parent / "build/tests/tiny-moe-qwen3moe.gguf"
+        if tiny.is_file():
+            model_path = tiny
+            print("[bmoe-serve] no model given — using the tiny test model "
+                  "(proves the plumbing, useless for real work)", flush=True)
+        else:
+            sys.exit("[bmoe-serve] no model given — pass --model /path/to/model.gguf or set BMOE_MODEL")
+    model_path = Path(model_path).expanduser()
+    if not model_path.is_file():
+        sys.exit(f"[bmoe-serve] model not found: {model_path}")
 
     engine_args = shlex.split(args.engine_args)
-    engine = Engine(args.engine, args.model, engine_args, args.ready_timeout)
+    engine = Engine(str(engine_path), str(model_path), engine_args, args.ready_timeout)
 
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"[bmoe-serve] OpenAI-compatible endpoint: http://{args.host}:{args.port}/v1", flush=True)

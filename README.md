@@ -415,15 +415,17 @@ OpenAI-compatible endpoint, so opencode (or anything speaking `/v1/chat/completi
 engine as its local model. The model stays loaded between requests, expert cache warm:
 
 ```bash
-scripts/run-server.sh -m ~/llm/models/LFM2.5-8B-A1B-UD-Q4_K_M.gguf \
+python3 scripts/bmoe-serve.py -m ~/llm/models/LFM2.5-8B-A1B-UD-Q4_K_M.gguf \
     --model-id lfm2.5-8b-a1b \
-    --engine-args "--chatml --moe-stream --ctx-size 4096 --ubatch 512"
+    --engine-args "--chatml --moe-stream --ctx-size 16384 --ubatch 512"
 ```
 
 Then point the client at `http://127.0.0.1:8017/v1`. `--ubatch 512` caps the compute-buffer
 reservation (it scales with `ubatch × vocabulary` and reached 4.1 GiB at ctx 8192 on a desktop
-host) without touching decode speed. Reasoning models expose their thinking separately in
-`reasoning_content`, and every response carries the same perf block the CSV sink records.
+host) without touching decode speed, and client `max_tokens` budgets are clamped to the
+bridge's `--max-tokens` ceiling so an oversized request cannot sit in the context window for
+tens of minutes. Reasoning models expose their thinking separately in `reasoning_content`, and
+every response carries the same perf block the CSV sink records.
 ARM64 Linux: `scripts/build-arm64.sh` stages a self-contained bundle to run the server on an
 SBC or ARM box. Details: [docs/serve.md](docs/serve.md).
 

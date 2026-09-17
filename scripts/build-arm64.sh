@@ -59,6 +59,9 @@ rm -rf "$BUNDLE"
 mkdir -p "$BUNDLE/lib"
 cp "$BUILD_DIR/cli/bmoe-cli" "$BUNDLE/"
 cp "$BUILD_DIR"/bin/lib*.so* "$BUNDLE/lib/"
+# The bridge rides along so the bundle serves agent tooling standalone — no repo checkout
+# needed on the target; the script resolves the engine to the bmoe-cli sitting beside it.
+cp "$ROOT/scripts/bmoe-serve.py" "$BUNDLE/"
 cat > "$BUNDLE/README.md" <<'EOF'
 # bmoe-arm64 — portable ARM64 Linux bundle
 
@@ -75,11 +78,12 @@ SIGILL). The expert-ready hook is compiled in, so --overlap works.
 
 ## Serve agent tooling (opencode or anything OpenAI-compatible)
 
-    python3 scripts/bmoe-serve.py --engine ./bmoe-cli --model model.gguf \
-        --port 8017 --engine-args "--chatml --moe-stream --ctx-size 4096 --ubatch 512"
+    python3 ./bmoe-serve.py --model model.gguf \
+        --port 8017 --engine-args "--chatml --moe-stream --ctx-size 8192 --ubatch 512"
 
-Requires python3 on the target, stdlib only. --ubatch 512 caps the compute-buffer reservation
-(it scales with ubatch x vocabulary); decode speed is unaffected. See docs/serve.md.
+Requires python3 on the target, stdlib only. The bridge is bundled alongside this README and
+resolves the engine to ./bmoe-cli automatically. --ubatch 512 caps the compute-buffer
+reservation (it scales with ubatch x vocabulary); decode speed is unaffected. See docs/serve.md.
 EOF
 echo "staged: $BUNDLE"
 
