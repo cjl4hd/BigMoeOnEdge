@@ -1275,9 +1275,14 @@ RunResult Session::generate(const GenerateRequest & req,
     }
     if (n_prompt < 1) return fail("empty prompt after tokenization");
     tokens.resize(n_prompt);
-    if (n_prompt + req.n_predict + 8 > im.cfg.n_ctx)
+    if (n_prompt + req.n_predict + 8 > im.cfg.n_ctx) {
+        // Reuse was not consumed yet, but the engine-held history is behind the context and the
+        // next turn's render will differ from the mirror; reset so it full-clears rather than
+        // appends onto a cache the session just overflowed.
+        im.kv_tokens.clear();
         return fail("prompt + n_predict exceeds the session n_ctx (" + std::to_string(im.cfg.n_ctx) +
                     "); open the session with a larger n_ctx");
+    }
 
     // The text to surface: with chat on, parse the raw output so a reasoning model's internal
     // thinking is separated from the answer. The answer is shown inline; the reasoning is handed to
@@ -1317,13 +1322,23 @@ RunResult Session::generate(const GenerateRequest & req,
     // turn leaves that poison behind with kv_tokens already empty (the mirror only grows on
     // success), so the poison is invisible to any condition keyed on the mirror — it surfaced as a
     // ret=2 cascade where even a fresh conversation died at pos 0. Prefix reuse is therefore
-    // transformer-only, and the sweep is UNCONDITIONAL: every hybrid turn starts from a truly
-    // clean memory, whatever the previous turn did. chat_history is kept because the next render
-    // still needs the earlier turns.
-    if (llama_model_is_hybrid(im.model.get()) || llama_model_is_recurrent(im.model.get())) {
-        llama_memory_clear(llama_get_memory(ctx), true);
-        if (im.ctx_dft) llama_memory_clear(llama_get_memory(im.ctx_dft.get()), true);
-        im.kv_tokens.clear();
+    // transformer-only, with one exception: an APPEND. When the incoming render strictly extends
+    // the resident token mirror, the diff below finds n_common == n_prompt: no seq_rm runs at all,
+    // every decode only appends cells, and the failure paths reset the mirror so the next turn
+    // full-clears. A hybrid continuation turn (aider appends the next instruction to an identical
+    // prefix, the common case) then skips its whole prefill without ever rewinding cell state.
+    // A failed/cancelled append turn poisons the mirror on purpose — cells may sit past its end —
+    // which the mirror==0 condition turns into the unconditional clear.
+    const bool is_hybrid = llama_model_is_hybrid(im.model.get()) || llama_model_is_recurrent(im.model.get());
+    if (is_hybrid) {
+        const bool append_ok = chat_on && req.n_predict > 0 && !im.kv_tokens.empty() &&
+                               im.kv_tokens.size() < tokens.size() &&
+                               std::equal(im.kv_tokens.begin(), im.kv_tokens.end(), tokens.begin());
+        if (!append_ok) {
+            llama_memory_clear(llama_get_memory(ctx), true);
+            if (im.ctx_dft) llama_memory_clear(llama_get_memory(im.ctx_dft.get()), true);
+            im.kv_tokens.clear();
+        }
     }
     if (chat_on && !im.kv_tokens.empty()) {
         const size_t max_common = tokens.size() > 0 ? tokens.size() - 1 : 0;
@@ -1450,6 +1465,10 @@ RunResult Session::generate(const GenerateRequest & req,
                 return res;
             }
             if (moe.overlap && im.source.fatal()) return fail("expert stream I/O failed during overlap prefill");
+            // With reuse active, positions past n_common hold cells (hybrid) or KV (transformer)
+            // the mirror no longer describes; reset it so the next turn cannot diff against a
+            // prefix the cache no longer contains.
+            if (n_common > 0) im.kv_tokens.clear();
             return fail("prefill decode failed");
         }
         trace_flush();
@@ -1629,9 +1648,17 @@ RunResult Session::generate(const GenerateRequest & req,
         if (dec != 0) {
             if (im.cancel_requested.load(std::memory_order_relaxed)) {
                 res.cancelled = true;
+                // The aborted decode's commit state is unknowable: on a hybrid the cells may sit
+                // past the mirror even though every token in it decoded cleanly. Reset it so the
+                // next turn takes the full clear instead of trusting an append.
+                if (is_hybrid) im.kv_tokens.clear();
                 break;
             }
-            if (moe.overlap && im.source.fatal()) return fail("expert stream I/O failed during overlap decode");
+            if (moe.overlap && im.source.fatal()) {
+                if (n_common > 0) im.kv_tokens.clear();
+                return fail("expert stream I/O failed during overlap decode");
+            }
+            if (n_common > 0) im.kv_tokens.clear();
             return fail("decode failed during generation");
         }
         trace_flush(); // outside the s0..s1 bracket: the trace's own writes must not bill wall_ms
@@ -1681,8 +1708,10 @@ RunResult Session::generate(const GenerateRequest & req,
                 const auto p0 = clock_t_::now();
                 const uint64_t pb0 = moe.enabled ? im.source.stats().read_bytes : 0;
                 batch_fill(im.mtp_batch, verify_toks.data(), 1 + n_acc, n_past, /*all_logits*/ false);
-                if (!common_speculative_process(im.mtp.get(), im.mtp_batch))
+                if (!common_speculative_process(im.mtp.get(), im.mtp_batch)) {
+                    if (n_common > 0) im.kv_tokens.clear();
                     return fail("MTP draft context failed to process the verify batch");
+                }
                 draft_s += secs(p0, clock_t_::now());
                 if (moe.enabled) im.mtp_draft_read_bytes += im.source.stats().read_bytes - pb0;
             }
@@ -1693,8 +1722,10 @@ RunResult Session::generate(const GenerateRequest & req,
             // needs no rollback of its own — it was never given the tail.
             if (n_acc < n_draft) {
                 const llama_pos keep = n_past + 1 + n_acc;
-                if (!llama_memory_seq_rm(llama_get_memory(ctx), /*seq*/ 0, keep, -1))
+                if (!llama_memory_seq_rm(llama_get_memory(ctx), /*seq*/ 0, keep, -1)) {
+                    if (n_common > 0) im.kv_tokens.clear();
                     return fail("failed to roll back the rejected draft tokens from the KV cache");
+                }
             }
             if (mtp_on) common_speculative_accept(im.mtp.get(), /*seq*/ 0, (uint16_t) n_acc);
         }

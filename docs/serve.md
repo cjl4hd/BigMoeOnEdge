@@ -62,6 +62,19 @@ first seen as dead LFM2.5 sessions the moment a client rewrote its history). Tho
 re-prefill every turn — the pre-residency behavior — while keeping the engine-held conversation,
 and a cancelled turn likewise forces the next turn's full re-prefill there.
 
+**One exception: pure appends.** When a hybrid turn's rendered prompt is a strict extension of the
+resident token mirror — the client echoed the previous assistant reply verbatim and only added
+messages — the diff finds the full prompt already resident and no `seq_rm` runs at all. Cells only
+ever grow, so the reuse is as safe as a first prefill, and a continuation turn skips its whole
+prefill. Two properties bound this in practice: the mirror includes the *generated* tokens, so the
+client must echo the previous reply verbatim (aider and the bridge do; hand-built histories do
+not); and any failed, cancelled or overflowed turn resets the mirror so the next turn full-clears —
+cell state may sit past what the mirror describes. Thinking hybrids (LFM2.5) cannot hit this path
+at all: the reasoning tokens live in the cache between the prompt and the answer, but a client
+echoes only the answer, so the render always diverges before the append point. Append reuse on
+hybrids is therefore a property of non-thinking hybrid stacks (e.g. qwen35moe with
+`enable_thinking=false`).
+
 ## Warmup: the first query is cheap too
 
 Residency helps from the second turn on; the **warmup** moves the first turn's cost to server
