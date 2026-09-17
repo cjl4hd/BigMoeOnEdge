@@ -14,7 +14,6 @@ Semantic Versioning.
   fails (`llama_decode: failed to decode, ret = 2`); those models re-prefill every turn (the
   pre-residency behavior) while keeping their engine-held `chat_history`. A
   `generate` request may carry a `messages` array (role/content pairs) alongside — or instead of —
-  `generate` request may carry a `messages` array (role/content pairs) alongside — or instead of —
   the flat `prompt`: the engine renders its chat template over the client-owned conversation and
   reuses the KV prefix of the longest common history, prefilling only the diverging suffix. This
   makes a stateless HTTP bridge (or any OpenAI-style client) cheap on the second turn: appending
@@ -25,6 +24,21 @@ Semantic Versioning.
   forwards plain-text OpenAI conversations verbatim (non-text content falls back to the flattened
   prompt path). The assistant commit is skipped for client-history turns: the next request carries
   the authoritative array, so appending the reply would only diverge from it.
+- **Warmup: frontload the conversation prefix at server start** (`bmoe-serve.py`). After each
+  request the bridge persists the stable prefix (everything but the in-flight user turn) to
+  `~/.cache/bmoe-serve/warmup.json` (0600); at startup it replays that prefix through the
+  messages path in short segments (`n_predict=0`, prefill-only), so a client's FIRST query of a
+  session pays delta-only prefill instead of the whole conversation — speculative-safe by
+  construction, since the residency diff truncates at the first divergence. Segments release the
+  engine lock between segments, so a real request preempts a running warmup; `--no-warmup`
+  disables the replay. The bridge also logs one greppable `TELEMETRY` line per request
+  (`n_prompt`/`n_reused`/`tokens`/`prefill_s`/`tok_s`/…) because agent clients discard the perf
+  block. The debug request-dump to `/tmp` was removed (it wrote conversation contents to a
+  world-readable file).
+- **`bailingmoe2` recipe row** (inclusionAI Ling-mini-2.0 / Ling-lite-2.0, 16.5B-~1.4B and
+  16.8B-2.75B active). Pure attention stack — not in llama.cpp's hybrid list, so residency
+  applies; 256 routed experts name the standard split suffixes, shared expert and router bias
+  stay resident.
 
 ## [0.24.1] - 2026-09-16
 
