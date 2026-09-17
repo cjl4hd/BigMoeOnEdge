@@ -192,10 +192,13 @@ Defaults are the measured winning recipe for a model near RAM.
 | `qwen2moe` | Qwen2 MoE family | Same layout as qwen3moe |
 | `gemma4` | Gemma 4 MoE (e.g. 26B-A4B) | Fused expert layout, handled by its registry row |
 | `gpt-oss` | OpenAI gpt-oss-20b / 120b | Purely routed; MXFP4 weights stream unchanged |
+| `laguna` | Poolside Laguna XS 2.1 / S 2.1 (33B-A3B) | Pure attention, agentic-coding tuned; router bias and shared expert stay resident |
 | `lfm2moe` | Liquid AI LFM2 / LFM2.5 MoE (e.g. 8B-A1B) | Hybrid conv/attention stack with leading dense blocks; those stay resident |
 | `deepseek4` | DeepSeek V4 Flash (284B-A13B), validated on the 0731 release | V3.2-style routing (256 experts + shared); compressed attention is dense-side; ships multi-shard |
+| `bailingmoe2` | Ling-mini-2.0 (16.5B-A1.4B), Ling-lite-2.0 (16.8B-A2.75B) | Pure attention; shared expert and router bias stay resident |
 | `bailingmoe3` | Ling 3.0 (e.g. Ling-3.0-flash, 127B-A5B) | 512 routed experts + shared, biased top-k; hybrid KDA/MLA attention is dense-side |
 | `qwen4exp` | Qwen3.8-Flash-Next (125B-A6B), the Qwen4 architecture preview | 512 routed experts + shared; a 51B n-gram embedding table stays mmap'd (see limitations). Runs on the 12 GB test phone with pinned dense weights: ~2 tok/s at UD-IQ3_XXS, 3.5 tok/s at the Q2_K build; upstream support merged in `b10666` |
+| `olmoe` | allenai OLMoE-1B-7B (6.9B-A1B) | Smallest supported MoE; plain fused experts, nothing beyond the routing stays resident |
 
 Adding an architecture is one row in the registry; expert counts and layouts are discovered from
 the model file at runtime, so nothing about a specific model is hardcoded in the streaming path.

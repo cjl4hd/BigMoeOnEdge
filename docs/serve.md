@@ -83,6 +83,36 @@ For observability the bridge prints one `TELEMETRY` line per request to its log 
 `n_reused`, `tokens`, `prefill_s`, `tok_s`, `wall_s`, … — because agent clients (aider, opencode)
 discard the perf block.
 
+## Host results — the residency/warmup effect, measured
+
+All rows from a 2015-era 8-thread laptop (12 GB RAM, SATA-class storage), `--ctx-size 16384
+--ubatch 512 --moe-stream`, served through the bridge. These measure the *serving* mechanics
+(warmup, residency, expert I/O), not peak throughput — see [benchmarks.md](benchmarks.md) for the
+device matrix and its fixed protocol.
+
+| Model (arch) | Load | Cold 1st turn | Warm turn | Decode | Notes |
+|---|---|---|---|---|---|
+| Ling-mini-2.0 Q4 (`bailingmoe2`, 16.5B/1.4B) | 27 s | 58 s | **12 s** (202 reused / 34 prefilled) | 3–4 tok/s | no thinking phase; best quality/speed balance |
+| OLMoE-1B-7B Q4 (`olmoe`, 6.9B/1.0B) | 12 s | 17 s | **3 s** (219 reused / 21 prefilled) | 9–14 tok/s | wordy, older; lowest RAM (≈4.7 GB headroom) |
+| Laguna XS 2.1 Q4 (`laguna`, 33B/3B) | 61–96 s | 127 s | 15–24 s | ~1.4 tok/s | strongest quality; cold-expert I/O dominates |
+
+Reading the numbers:
+
+- **Warm turns are the design point.** The delta between cold and warm is the expert I/O plus the
+  prefix prefill that residency removed; what remains is decode plus a fixed per-request cost as
+  the expert cache churns. On a model whose whole file fits in page cache (OLMoE, 4.2 GB), warm
+  prefill reached 22 tok/s and the warm turn is decode-bound pure and simple.
+- **Warmup frontloads the first turn.** Same conversation replayed after a restart: 219 tokens
+  prefilled cold → **12 prefilled / 207 reused** with warmup replayed at startup.
+- **Prefill speed is page-cache-bound, not compute-bound, on this host.** The same model measured
+  3.7 tok/s prefill cold and 27 tok/s warm within one session; the engine's O_DIRECT path wins
+  when RAM cannot hold the file, and the page cache wins when it can.
+- **Client interaction quality (measured, same host):** aider's `whole` edit format applies
+  single-turn edits reliably on Ling-mini but multi-turn rewrites silently drop earlier changes;
+  the `diff` format exceeded the model's ability (aider retried until timeout). opencode's
+  tool-call editing completed, but at ~1B-class quality the model hallucinated tool output —
+  treat these models as Q&A/drafting engines, not autonomous agents.
+
 ## Memory budget on the host
 
 Compute buffers are reserved for the widest graph, and the dominant term scales with

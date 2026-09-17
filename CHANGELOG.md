@@ -39,6 +39,12 @@ Semantic Versioning.
   16.8B-2.75B active). Pure attention stack — not in llama.cpp's hybrid list, so residency
   applies; 256 routed experts name the standard split suffixes, shared expert and router bias
   stay resident.
+- **`laguna` recipe row** (Poolside Laguna XS 2.1 / S 2.1, 33B-A3B agentic coding MoE). Pure
+  attention stack — not in llama.cpp's hybrid list, so residency applies. Routed experts name the
+  canonical split suffixes; router bias and one always-on shared expert stay resident.
+- **`olmoe` recipe row** (allenai OLMoE-1B-7B, 6.9B total / 0.99B active). The smallest supported
+  MoE; pure attention, residency applies. Standard split expert suffixes — no shared expert, no
+  router bias, no leading dense blocks.
 
 ## [0.24.1] - 2026-09-16
 
