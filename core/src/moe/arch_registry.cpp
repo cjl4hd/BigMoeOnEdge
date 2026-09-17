@@ -70,6 +70,13 @@ static const MoeRecipe k_recipes[] = {
     // expert, so the streamer does not bind it and the dense policy maps it like any other
     // non-expert weight. That makes the streamed fraction of this architecture unusually low —
     // see docs/limitations.md.
+    // laguna (Poolside Laguna XS 2.1 / S 2.1, 33B-A3B agentic coding MoE) is a pure attention
+    // stack — it is not in llama.cpp's hybrid list, so conversation residency applies. 256 routed
+    // experts at top-8 name the standard split suffixes, so streaming is one row. Two familiar
+    // resident-side details lower the streamed fraction: the router applies a per-expert bias
+    // (ffn_exp_probs_b, the lfm2moe pattern) and there is one always-on shared expert (ffn_*_shexp)
+    // that stays mmap-resident. No leading dense blocks — see docs/limitations.md.
+    {"laguna", {"ffn_gate_exps", "ffn_up_exps", "ffn_down_exps"}},
     {"qwen4exp", {"ffn_gate_exps", "ffn_up_exps", "ffn_down_exps"}},
 };
 
