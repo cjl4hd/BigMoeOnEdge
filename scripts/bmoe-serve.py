@@ -238,11 +238,10 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         # Generous default: thinking models spend completion tokens on reasoning before the
-        # Agents never send max_tokens need a generous default, and thinking models spend
-        # completion tokens on reasoning before answering — but the budget is still clamped
-        # to the ceiling below: a huge client max_tokens would otherwise sit in the n_ctx
-        # window (or, after the overflow retry, generate for tens of minutes). OpenAI
-        # clients treat max_tokens as a ceiling, so clamping is behavior-preserving.
+        # answer, and agent clients that never send max_tokens would otherwise get truncated.
+        # But the budget is clamped to the ceiling: a huge client max_tokens would otherwise
+        # sit in the n_ctx window (or, after the overflow retry, generate for tens of minutes).
+        # OpenAI clients treat max_tokens as a ceiling, so clamping is behavior-preserving.
         n_predict = min(int(req.get("max_tokens") or req.get("max_completion_tokens") or max_tokens_limit), max_tokens_limit)
         stream = bool(req.get("stream", False))
         prompt = flatten_messages(messages)
