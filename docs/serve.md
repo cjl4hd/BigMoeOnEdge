@@ -90,7 +90,12 @@ delta net) at N=32: reuse engages (`n_reused` > 0 on continuation turns), but re
 bit-exact** — under greedy decoding the same prompt produces different (and in arithmetic tests,
 contaminated) output depending on whether its prefix was restored or freshly prefilled, most
 likely mid-chunk snapshots of the chunked delta-net. The default is therefore **0 (off)**; the
-flag exists to track the upstream fix, and flipping it on is a deliberate opt-in.
+flag exists to track the upstream fix, and flipping it on is a deliberate opt-in. A second
+datum: lfm2moe is on upstream's rollback allowlist, but with snapshots enabled its graph
+**crashes during reserve** — a fixed ~368-byte node-pool overflow (invariant to context, ubatch
+and budget), i.e. upstream's node estimate does not cover the snapshot ops that graph emits.
+Three upstream events gate hybrid reuse: state restore worth more than zero (ggml-org/llama.cpp
+#25913), bit-exact restore, and the lfm2 reserve sizing.
 
 ## Warmup: the first query is cheap too
 
