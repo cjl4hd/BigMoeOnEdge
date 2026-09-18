@@ -42,6 +42,7 @@ ADRs record why it is built this way — read one before "fixing" what it decide
 | [adr/001-hybrid-session-reuse-policy.md](adr/001-hybrid-session-reuse-policy.md) | Hybrid sessions: append-only reuse, snapshot rollback off by default, full-clear fallback. |
 | [adr/002-reasoning-echo.md](adr/002-reasoning-echo.md) | `preserve_reasoning`: keep reasoning resident by echoing it back instead of rewinding state. |
 | [adr/003-bridge-auto-echo.md](adr/003-bridge-auto-echo.md) | `--auto-echo`: the bridge re-embeds reasoning into history server-side, so unmodified OpenAI clients get append reuse. |
+| [adr/004-hybrid-residency-blockers.md](adr/004-hybrid-residency-blockers.md) | Hybrid edit-turn rewind waits on two upstream llama.cpp defects; the reserve fix goes upstream, exactness is not forked now. |
 
 ## Measurements
 
