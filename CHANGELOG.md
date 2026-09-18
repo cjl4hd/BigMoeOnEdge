@@ -74,11 +74,31 @@ Semantic Versioning.
   previously never exercised either arch; 7/7 with the fix). Routing supersedes ADR-004
   §2: the PR came from the user's own fork per mainline contribution flow, not from
   `Helldez/llama.cpp` — the Helldez fork-branch option remains reserved for anything that
-  must touch the submodule pin before an upstream merge. Also re-proven on current
-  upstream: snapshot restore is still not bit-exact on both gated-delta-net families
-  (qwen35 and lfm2 now measured, at rollback depths 3 and 8) — `--rs-seq` stays
-  default-off. Evidence: new `tools/bmoe-rsbench` (`reserve` / `diverge`), built with
-  `-DBMOE_BUILD_TOOLS=ON`.
+  must touch the submodule pin before an upstream merge. *(Correction, same release: the
+  "snapshot restore is still not bit-exact at depths 3 and 8" claim in this bullet was
+  falsified the same day — the measuring harness cleared its own pending rollback before
+  comparing. See the `bmoe-rsbench` bullet and ADR-004 Addendum 2 for the corrected
+  mechanism.)*
+  `--rs-seq` stays default-off. Evidence: new `tools/bmoe-rsbench` (`reserve` / `diverge`
+  / `sweep` / sensitivity probe), built with `-DBMOE_BUILD_TOOLS=ON`.
+- **`bmoe-rsbench` rewritten: the exactness "blocker" was a harness bug, and the real law
+  is snapshot-plane staleness ([ADR-004](docs/adr/004-hybrid-residency-blockers.md)
+  Addendum 2).** The original `diverge` mode compared a rolled-back context against a fresh
+  one — but its continuation helper opened with a full `seq_rm(-1,-1)`, wiping the pending
+  rollback it was supposed to exercise; every earlier "non-bit-exact restore" result
+  (`40` vs `420`, depth-3/8 DIFFERs on both GDN families) measured that artifact. The
+  rewritten tool feeds both sides of every comparison cell identical token sequences,
+  never touches the pending rollback, and adds a `sweep` mode (rollback depth ×
+  post-prefill single-token steps × rm batch shape, with a per-prompt state-sensitivity
+  probe) plus predicted-vs-observed output. Measured law on both qwen35 and lfm2moe, pin
+  and patched clone agreeing: rollback directly after the last multi-token ubatch is
+  **exact at every tested depth**; one or more single-token decode steps before the
+  rollback diverge on **both families at every depth** — snapshot planes d ≥ 1 go stale
+  because a ubatch writes only `min(n_seq_tokens, K)` planes. That staleness (not a
+  general non-exactness) is why `--rs-seq` stays default-off, and it suggests a cheap
+  upstream fix: replay the trailing tokens through one ubatch before restoring. Open
+  anomaly: lfm2moe at m=0, d=8 diverges identically in both rm shapes, unexplained by the
+  law and unreproduced elsewhere in the matrix.
 - **`scripts/bench-features.sh`: one-command before/after proof of the residency features.**
   Serves the model through the bridge on an isolated port (default 8019; a server on another
   port is untouched), runs a 3-turn chain with verified answers (a faster run with wrong answers

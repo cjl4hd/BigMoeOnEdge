@@ -104,16 +104,27 @@ recurrent state per token (`n_rs_seq` budget, marked `[EXPERIMENTAL]`), which ma
 partial `seq_rm` legal: the engine sets the budget at context creation when asked, and the generic
 diff path then serves hybrids like transformers — rewind within budget restores from snapshots,
 beyond it fails `seq_rm` and falls back to the same full clear. Measured on a 9B qwen35 (gated
-delta net) at N=32: reuse engages (`n_reused` > 0 on continuation turns), but restore is **not
-bit-exact** — under greedy decoding the same prompt produces different (and in arithmetic tests,
-contaminated) output depending on whether its prefix was restored or freshly prefilled, most
-likely mid-chunk snapshots of the chunked delta-net. The default is therefore **0 (off)**; the
-flag exists to track the upstream fix, and flipping it on is a deliberate opt-in. A second
+delta net) at N=32: reuse engages (`n_reused` > 0 on continuation turns). The default is
+**0 (off)**; the flag exists to track the upstream fix, and flipping it on is a deliberate
+opt-in. A second
 datum: lfm2moe is on upstream's rollback allowlist, but with snapshots enabled its graph
 **crashes during reserve** — a fixed ~368-byte node-pool overflow (invariant to context, ubatch
 and budget), i.e. upstream's node estimate does not cover the snapshot ops that graph emits.
 Three upstream events gate hybrid reuse: state restore worth more than zero (ggml-org/llama.cpp
-#25913), bit-exact restore, and the lfm2 reserve sizing.
+#25913), snapshot planes that survive single-token decode steps (see below), and the lfm2
+reserve sizing.
+
+**Why default-off: snapshot-plane staleness (measured 2026-09-18, ADR-004 Addendum 2).** An
+earlier claim here — restore is not bit-exact, blamed on mid-chunk snapshots of the chunked
+delta-net — was a harness artifact (the comparison wiped its own pending rollback) and is
+withdrawn. With a corrected matched-feed harness, upstream's restore roundtrip is exact when
+the rollback directly follows the last multi-token prefill ubatch, on both GDN families and
+at every depth tested. What breaks it is what every real turn looks like: single-token decode
+steps between the prefill and the rollback. A ubatch writes only `min(n_seq_tokens, K)`
+snapshot planes, so a 1-token step refreshes only plane 0 and the depth-d plane the rollback
+reads stays m tokens stale — restored streams diverge from the ground truth on both qwen35
+and lfm2moe. Until upstream replays the trailing tokens through one ubatch before restoring
+(or maintains the planes per token), the engine keeps the full-clear fallback.
 
 ## Warmup: the first query is cheap too
 
@@ -190,7 +201,8 @@ Measured on Ling-mini-2.0 (same host as the table above):
 
 Warmup cuts the first turn's prefill ~35×; the echo scenario skipped (Ling-mini does not think);
 `--rs-seq` is a verified no-op on a pure transformer — the flag only engages on hybrids, where
-the script's answer verification is what guards against upstream's non-bit-exact restore.
+the script's answer verification is what guards against the snapshot-plane staleness the
+rollback path still has after single-token decode steps (ADR-004 Addendum 2).
 
 Same script, thinking hybrid (LFM2.5-8B-A1B, `N_PREDICT=192` — reasoning needs headroom):
 

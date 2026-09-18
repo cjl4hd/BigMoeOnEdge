@@ -20,7 +20,11 @@ Three mechanisms were evaluated to recover reuse:
    budget; the generic diff path already falls back to full-clear when `seq_rm` returns
    false. Measured on Qwen3.5-9B: reuse engages (`n_reused` 21/33/58), but restore is
    **not bit-exact** — under greedy decoding the identical prompt returned `40` fresh and
-   `420` restored. Contamination, not noise.
+   `420` restored. Contamination, not noise. *(Superseded 2026-09-18, ADR-004 Addendum 2:
+   that harness cleared its own pending rollback before the comparison — the `40` vs `420`
+   contamination was an artifact of it, not of upstream restore. The off-by-default decision
+   in §2 below stands, re-derived on corrected evidence: snapshot planes d ≥ 1 go stale
+   across single-token decode steps, which is the shape every real turn has.)*
 3. **Reasoning echo** (`d83d153`, ADR-002): keep the resident prefix growing so the
    append path fires without any rewind.
 
@@ -51,5 +55,7 @@ Two further blockers were discovered and documented in `docs/serve.md`:
 - Harder: default hybrid turns still pay full prefill — the speedup needs ADR-002's echo
   cooperation or an upstream fix.
 - Accepted as-is: `--rs-seq` is a loaded footgun by design; its docs say so. The three
-  upstream gates (llama.cpp #25913 open, non-bit-exact restore, LFM2 graph-reserve crash)
-  are tracked in `docs/serve.md` and must be re-verified after any submodule bump.
+  upstream gates (llama.cpp #25913 open, snapshot-plane staleness after single-token steps
+  — re-derived from the falsified "non-bit-exact restore", see ADR-004 Addendum 2 — and
+  the LFM2 graph-reserve crash) are tracked in `docs/serve.md` and must be re-verified
+  after any submodule bump.

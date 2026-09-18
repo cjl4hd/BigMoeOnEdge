@@ -78,7 +78,58 @@ reserved for anything that must touch the submodule pin before upstream merges.
 
 `tools/bmoe-rsbench` (this repo) now reproduces both blockers against any llama.cpp, using
 the engine's context shape. Re-verified on current upstream master: reserve aborts without
-the fix and reserves cleanly with it; and snapshot restore is **still not bit-exact on both
+the fix and reserves cleanly with it. ~~Snapshot restore is **still not bit-exact on both
 GDN families** — qwen35 (as before) and now lfm2 too, at rollback depths 3 (matching the
-upstream fixture test's depth) and 8 alike. Decision 3 (full-clear fallback, `--rs-seq`
-default-off) therefore stands on wider evidence than before.
+upstream fixture test's depth) and 8 alike.~~ **Superseded by Addendum 2 below: those
+exactness baselines were a harness artifact.** Decision 3 (full-clear fallback,
+`--rs-seq` default-off) stands, but on the corrected evidence of Addendum 2.
+
+## Addendum 2 (2026-09-18, later): the exactness "blocker" was a harness bug — the real law is snapshot-plane staleness after single-token steps
+
+**Falsification.** The `diverge` harness compared a rolled-back context against a fresh
+reference — but its continuation call went through a helper whose first line is
+`llama_memory_seq_rm(mem, 0, -1, -1)`, a **full clear that wipes the pending rollback**
+(`rm_all` → `rs_idx = 0`, `llama-memory-recurrent.cpp:179`). The "restored" side therefore
+re-prefilled its tail on a zeroed recurrent state plus partial attention KV, and every prior
+exactness result — `40` vs `420` on Qwen3.5-9B (2026-09-17), the depth-3/8 DIFFERs on both
+families (2026-09-18) — measured that artifact, not upstream restore. Falsified per the
+discovery rule; nothing upstream contradicted.
+
+**Corrected method.** `bmoe-rsbench` was rewritten: both sides of every cell are fed
+**identical token sequences** (prompt + m single-token steps + the rm-phase tokens), and the
+rolled-back side's pending rollback is never cleared — its replay then decodes the same tail
+the reference side merely continues from. A sensitivity probe (full-clear + re-prefill vs
+plain continuation) proves per prompt whether the greedy argmax can even see a state
+difference.
+
+**Measured law (engine-shaped context, qwen35 + lfm2moe, pin and patched clone agree):**
+
+- **m = 0** (rollback directly after the last multi-token ubatch): **EXACT at every swept
+depth** (1, 3, 8, 24; single-token and single-ubatch rm alike) on qwen35, and on lfm2moe at
+d = 1, 3, 24. Upstream's snapshot-restore roundtrip **is exact** in the regime its fixture
+test exercises — the fixture test passes because it never generates between prefill and the
+rollback, and with the harness fixed, so do we.
+- **m ≥ 1** (single-token decode steps between the last multi-token ubatch and the rollback):
+**DIFFER on both families at every depth and rm shape.** Mechanism: a ubatch writes only
+`min(n_seq_tokens, K)` snapshot planes (`delta-net-base.cpp:587`, lfm2.cpp:211), so
+single-token steps refresh **only plane 0** and planes d ≥ 1 keep their values from the last
+multi-token ubatch; the rollback then reads a plane that is m tokens stale. The m ≥ 1 shape
+is exactly what the server produces on a hybrid edit turn (engine decode steps always
+intervene between the prefill and the mid-sequence `seq_rm`).
+- **Residual anomaly (open):** lfm2moe at m = 0, d = 8 differs **identically in both rm
+shapes** (same first diverging token) — not explained by the plane-staleness law above and
+not reproduced at d = 1, 3 or 24, nor on qwen35 at any depth.
+
+**Decision 3 stands, re-derived.** `--rs-seq` stays default-off — but the reason changes:
+restore is exact at m = 0 and the doc claims of a general "non-bit-exact restore" upstream
+are withdrawn; the blocker is **staleness of snapshot planes d ≥ 1 across single-token
+decode steps**, which no upstream code guards against today. A candidate upstream fix falls
+out of the mechanism: before applying a pending rollback with depth d, replay the m trailing
+tokens through one multi-token ubatch (which rewrites planes 0..min(m, K−1) from the true
+states), or maintain the planes per token at decode time. Only after such a fix lands may
+ADR-001 §2's flip-on trigger fire — and the m = 0 exactness result is what makes that fix
+look cheap rather than research-grade.
+
+Cost of the correction: two prior "measurements" (ADR-001 §Context 2, the 0.24.2 CHANGELOG
+bullet) are marked superseded here and in place; no code change results (the default was
+already off and remains off).

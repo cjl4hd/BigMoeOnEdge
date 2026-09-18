@@ -6,52 +6,60 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-18 (late night). Phase: hybrid residency blockers —
-reserve crash root-caused and upstreamed (PR #29085); bit-exact restore work started
-(phase 2) with fresh baselines.*
-*One-line status: the LFM2 reserve crash is a 2-line budget-list omission, upstreamed
-with lfm2/lfm2moe rollback tests (7/7); snapshot restore proven non-exact on BOTH GDN
-families at depths 3 and 8; stacked PR #197 still held (OPEN).*
+*Resume last rewritten: 2026-09-18 (late night, session 2). Phase: hybrid residency blockers —
+the exactness "blocker" was FALSIFIED as a harness bug; the real law is snapshot-plane
+staleness after single-token decode steps, proven on both GDN families; rsbench rewritten
+into a matrix tool.*
+*One-line status: upstream snapshot restore is EXACT when the rollback directly follows the
+last multi-token ubatch (m=0, every tested depth on qwen35; d=1/3/24 on lfm2moe) and DIFFERS
+on both families once any single-token decode precedes the rollback (m≥1, every depth and
+rm shape) — that staleness (not a general non-exactness) keeps `--rs-seq` off; PR #29085 and
+stacked PR #197 both still OPEN.*
 
 ## State delta (this session)
 
-- **Reserve crash root-caused and upstreamed:** reproduces on pristine upstream master —
-  `graph_max_nodes()` gives the linear-attention family an elevated node budget and the
-  LFM2 archs (though on the rollback allowlist) were missing from it → default bucket,
-  exactly one `ggml_tensor` object (368 B) short. **PR open:
-  [ggml-org/llama.cpp#29085](https://github.com/ggml-org/llama.cpp/pull/29085)** from the
-  user's fork `cjl4hd/llama.cpp`, branch `fix/lfm2-rs-reserve` (2-line arch addition plus
-  lfm2/lfm2moe rows for `test-recurrent-state-rollback`; 7/7 with the fix — that suite
-  had never exercised either arch).
-- **Exactness re-proven wider:** `bmoe-rsbench diverge` shows DIFFER on both real GDN
-  models (Qwen3.5-9B, LFM2.5-8B) at rollback depth 3 (test-parity) and 8 alike; restored
-  streams degenerate (echo-loops/repetition), sometimes starting correct →
-  position-dependent corruption, consistent with the chunk-boundary hypothesis.
-- **New diagnostic tool:** `tools/bmoe-rsbench` (`reserve` / `diverge`), engine-shaped
-  context (n_ubatch = n_batch, use_extra_bufts=false), opt-in via `-DBMOE_BUILD_TOOLS=ON`.
-  A/B proof: exit 134 against our unfixed pin, clean reserve against the patched clone.
-  Pin backtrace differs from master's (`ggml_view_3d` vs `ggml_add` site) — the pin's LFM2
-  graph is older; re-verify after every submodule bump.
-- **Routing record:** ADR-004 addendum — mainline PRs go via the user's own fork
-  (`cjl4hd`) per the normal contribution flow; the Helldez 1-commit fork-branch option
-  stays reserved for anything that must touch the submodule pin before an upstream merge.
-  CHANGELOG entry under 0.24.2 Added.
-- Earlier this arc (unchanged): append-only hybrid reuse (`e930b4d`), warmup replay
-  (`2cb9cd3`), `--rs-seq` wired but off (`63768e7`), `preserve_reasoning` (`d83d153`),
-  bridge `--auto-echo` + aider canonicalization (`57c654e`, `39cc706`); aider telemetry
-  confirmed the ladder (follow-ups 16–18 prefilled / 587→1243 reused / ~0.8 s; edits
-  full-clear by design). Lifecycle consolidated to this single file.
+- **FALSIFICATION: the "non-bit-exact restore" blocker was a harness bug.** The old
+  `bmoe-rsbench diverge` called its continuation through `greedy_generate`, whose first
+  line was `llama_memory_seq_rm(mem, 0, -1, -1)` — a full clear that wipes the pending
+  rollback (`rm_all` → `rs_idx=0`, llama-memory-recurrent.cpp:179). The "restored" side
+  re-prefilled its tail on zeroed recurrent state + partial attention KV. Every prior
+  exactness datum — `40` vs `420` (09-17), depth-3/8 DIFFERs on both families (09-18
+  early) — measured that artifact. Falsified explicitly in ADR-001 (§Context 2) and
+  ADR-004 (Addendum 1 claim struck, Addendum 2 written); CHANGELOG and docs/serve.md
+  corrected; nothing upstream contradicted.
+- **The corrected law (matched-feed harness, both GDN families, pin + patched clone
+  agree):** m=0 (rollback directly after the last multi-token ubatch) is EXACT at every
+  tested depth on qwen35 (d=1,3,8,24; single and batched rm) and on lfm2moe at d=1,3,24;
+  m≥1 (any single-token decode between the last multi-token ubatch and the rollback) is
+  DIFFER on both families at every depth and rm shape. Mechanism: a ubatch writes only
+  min(n_seq_tokens, K) snapshot planes → single-token steps refresh only plane 0, planes
+  d≥1 go stale. That is the server's real edit-turn shape, and it suggests a cheap
+  upstream fix (replay the m trailing tokens through one ubatch before restoring).
+- **Residual open anomaly:** lfm2moe m=0 d=8 DIFFERs identically in both rm shapes
+  (same first diverging token; counting-chain prompt) — unexplained by the plane-staleness
+  law, unreproduced at d=1/3/24 or on qwen35.
+- **Tool rewritten:** `tools/bmoe-rsbench` — `reserve` (unchanged, re-verified exit 134
+  on the pin), `diverge` (fixed: matched-feed reference, no memory touch), new `sweep`
+  (mode × d_rm × m matrix, per-prompt sensitivity probe, predicted-vs-observed per cell).
+  Two instrument lessons baked in: EXACT cells are uninformative unless the prompt's
+  greedy argmax is state-sensitive (the counting chain was not; probe added), and the
+  fox prompt on the pin reports the same. Pin-linked build via the gate build; a
+  clone-linked runner compiles standalone (`g++` line in PROGRESS history below).
+- Reserve crash + PR #29085, routing addendum, and the earlier arc (append reuse,
+  warmup, `--rs-seq` wiring, `preserve_reasoning`, `--auto-echo` + aider
+  canonicalization) unchanged from the previous session's record.
 
 ## Artifacts touched (this session)
 
 | File | What |
 |---|---|
-| (fork) `cjl4hd/llama.cpp` branch `fix/lfm2-rs-reserve` | the upstream PR (llama-context.cpp + tests/CMakeLists.txt) |
-| `tools/rsbench.cpp`, `tools/CMakeLists.txt` | new `bmoe-rsbench` diagnostic (the one llama-linked tool, opt-in) |
-| `docs/adr/004` | addendum: root cause, PR link, wider exactness proof |
-| `CHANGELOG.md` | reserve-fix + exactness entry under 0.24.2 Added |
+| `tools/rsbench.cpp` | rewritten: fixed diverge harness bug; added sweep + sensitivity probe + predictions |
+| `docs/adr/004` | Addendum 2: falsification, corrected method, measured law, candidate fix; Addendum 1 claim struck through |
+| `docs/adr/001` | §Context 2 superseded note; gates bullet re-derived |
+| `docs/serve.md` | rs-seq paragraph corrected (staleness law, not non-exactness); bench guard sentence updated |
+| `CHANGELOG.md` | 0.24.2: correction note on the old claim; new `bmoe-rsbench` rewritten bullet |
 | this file | resume rewrite + history entry |
-| clone `~/git/llama.cpp` | upstream work area (origin=cjl4hd, upstream=ggml-org, helldez=pin source); fixture models under `build/tests/test-models/` |
+| `/tmp/bmoe-rsbench-clone` | clone-linked runner (regenerate: `g++ -O2 -std=c++17 -I ~/git/llama.cpp/include -I ~/git/llama.cpp/ggml/include tools/rsbench.cpp -o /tmp/bmoe-rsbench-clone -L ~/git/llama.cpp/build/bin -lllama -lggml -lggml-base -lggml-cpu -Wl,-rpath,$HOME/git/llama.cpp/build/bin`) |
 
 Branch `feat/session-residency` (stacked on `feat/serve-bridge-arm64`), pushed to
 `fork`. Tags: `progress/2026-09-17-residency-warmup`,
@@ -62,11 +70,10 @@ Branch `feat/session-residency` (stacked on `feat/serve-bridge-arm64`), pushed t
 - **Server**: LFM2.5-8B on :8017 with `--auto-echo` (`lfm2moe`, 8k ctx, `--chatml`).
   Daily-driver alternative (Ling-mini): `setsid nohup python3 -u scripts/bmoe-serve.py -m ~/llm/models/Ling-mini-2.0-Q4_K_M.gguf --engine-args "--ctx-size 8192 --chatml" --port 8017 > /tmp/bmoe-serve.log 2>&1 &`
   (add `--auto-echo` for thinking models; Ling-mini does not think).
-- **Models** (`~/llm/models/`): Ling-mini-2.0, LFM2.5-8B, Qwen3.5-9B, olmoe-1b-7b,
-  Laguna-XS-2.1, Ornith-1.5, Qwen3-30B, Qwen3.6-35B, Cyber-Tiel-35B.
-- **Warmup cache** `~/.cache/bmoe-serve/warmup.json`: self-regenerating (the user's
-  earlier LFM2.5 chain was lost during bench debugging — bench script now
-  backs up/restores it around every run).
+- **Models** (`~/llm/models/`): Ling-mini-2.0, LFM2.5-8B-A1B-UD-Q4_K_M (note: no plain
+  `-Q4_K_M` file — sweeps use the UD file), Qwen3.5-9B, olmoe-1b-7b, Laguna-XS-2.1,
+  Ornith-1.5, Qwen3-30B, Qwen3.6-35B, Cyber-Tiel-35B.
+- **Warmup cache** `~/.cache/bmoe-serve/warmup.json`: self-regenerating.
 - **Remotes**: `origin` = Helldez/BigMoeOnEdge (upstream; PR #197 from fork's
   `feat/serve-bridge-arm64`), `fork` = cjl4hd/BigMoeOnEdge (push target); `gh` authed
   as `cjl4hd`. Submodule: `Helldez/llama.cpp` @ `0e8c83e51` (one sanctioned expert-hook
@@ -78,8 +85,8 @@ Branch `feat/session-residency` (stacked on `feat/serve-bridge-arm64`), pushed t
 - **aider scratch repo**: `~/aider-test` (planted `a - b` bug in `calculator.py`).
 - Untracked, NOT ours: `.opencode/`, `bmoe-arm64*`, `opencode.json`, `.aider*`, logs.
 - Ephemeral: `/tmp/bmoe-serve.log`, `/tmp/bmoe-reqs.jsonl` (only when `BMOE_DEBUG_ECHO=1`),
-  `/tmp/bf-*` bench outputs, `/tmp/rsbench*.err` (repro evidence; `/tmp/rsbench.cpp`
-  superseded by `tools/rsbench.cpp`) — all regenerable.
+  `/tmp/bf-*` bench outputs, `/tmp/sweep-*.txt` + `/tmp/rsbench-*.err` (this session's
+  matrix evidence, all regenerable via the rsbench commands in the history entry below).
 
 ## Open questions / blocked items
 
@@ -87,24 +94,30 @@ Branch `feat/session-residency` (stacked on `feat/serve-bridge-arm64`), pushed t
    fork main → rebase `feat/session-residency` (serve-bridge commits collapse) →
    `gh pr create --repo Helldez/BigMoeOnEdge --base main --head cjl4hd:feat/session-residency`.
    Fallback if #197 stalls: fork-internal PR (`--repo cjl4hd --base feat/serve-bridge-arm64`), retarget later.
-2. **PR #29085 (reserve fix) awaits upstream CI/review.** When merged it reaches this
-   dependency only via a submodule bump — the current pin is unfixed (rsbench proves it
-   aborts), so do NOT enable `--rs-seq` until the bump lands, and re-run the byte-identity
-   gates after it (ADR-001's bump rule).
-3. **Bit-exact restore (phase 2, in progress per user decision):** root-cause the GDN
-   divergence (chunk-boundary hypothesis first), then prototype chunk-aligned snapshots +
-   partial-chunk replay. Success = byte-exact streams across the depth×ubatch matrix.
-   The clone is the work area; upstream remains the shipping vehicle; Helldez fork-branch
-   only if something must bridge the pin pre-merge (needs agreement, AGENTS.md #1).
+2. **PR #29085 (reserve fix) awaits upstream CI/review** (checked this session: OPEN,
+   REVIEW_REQUIRED). When merged it reaches this dependency only via a submodule bump —
+   re-run the byte-identity gates after the bump (ADR-001's bump rule), and re-run
+   `bmoe-rsbench reserve` on the new pin (the backtrace site differs pin↔master).
+3. **Upstream the staleness fix (phase 2, next).** The m≥1 law + the min(n_seq_tokens, K)
+   write rule suggest the fix: before applying a pending rollback of depth d after m
+   single-token steps, replay the m trailing tokens through one multi-token ubatch
+   (refreshing planes 0..min(m, K−1)), or maintain planes per token at decode time.
+   Route per ADR-004 Addendum 1: upstream PR from the user's fork; clone `~/git/llama.cpp`
+   is the work area. Also resolve the lfm2moe m=0 d=8 anomaly (or record it upstream as
+   a separate datum) before/with the PR.
 
 ## Next actions (ordered)
 
-1. **Watch #29085 and #197** (`gh pr view 29085 --repo ggml-org/llama.cpp`); execute the
+1. **Upstream the snapshot-staleness fix** (ADR-004 Addendum 2): reproduce the m≥1 law in
+   the clone, implement ubatch-replay-before-restore (or per-token plane maintenance),
+   extend `test-recurrent-state-rollback` to generate m≥1 tokens before the rollback (the
+   current fixture only tests m=0 — its EXACT pass is why the staleness hid), open the PR
+   from `cjl4hd/llama.cpp`. Entry: work in `~/git/llama.cpp`.
+2. **Resolve the lfm2moe m=0 d=8 anomaly** (identical DIFFER in both rm shapes): check
+   whether depth-8 plane content itself is wrong at m=0 (dump/compare planes d=8 vs a
+   replayed prefill state in the clone) or whether the restore path mis-indexes that depth.
+3. **Watch #29085 and #197** (`gh pr view 29085 --repo ggml-org/llama.cpp`); execute the
    stacked-PR plan when #197 merges; do the bump + gates when #29085 merges.
-2. **Build the divergence-position matrix** (phase 2): extend `bmoe-rsbench` with a sweep
-   over rollback depth × ubatch width × snapshot count on both GDN families, byte-compare.
-3. **Chunk-boundary hypothesis test:** instrument snapshot/restore in the clone to log
-   chunk positions at snapshot vs restore; predict EXACT/DIFFER per cell, check the matrix.
 4. **Measure Ling-mini edit-turn reuse** with captured aider payloads — the free
    transformer rewind (ADR-004 Consequences).
 5. **Opencode re-test** with `--auto-echo` on LFM2.5 — stable tool-schema prefix should
@@ -120,6 +133,8 @@ Branch `feat/session-residency` (stacked on `feat/serve-bridge-arm64`), pushed t
 4. `curl -fsS -m 3 http://127.0.0.1:8017/v1/models` → the `bmoe-local` JSON.
 5. `bash -n scripts/bench-features.sh && python3 -m py_compile scripts/bmoe-serve.py` → silent.
 6. `test -x build/tools/bmoe-rsbench` → exists (needs `-DBMOE_BUILD_TOOLS=ON`).
+7. `./build/tools/bmoe-rsbench reserve <lfm2 gguf>` → exit 134 on the unfixed pin
+   (regression signal for the reserve repro; flips to 0 after the #29085 bump).
 
 If a gate fails: re-derive from artifacts (git log, docs/adr, history below) before
 continuing. Never weaken a gate to make it pass.
@@ -382,3 +397,57 @@ only), the deliberate exception to the tools' no-llama rule, opt-in via
 (exit 134, backtrace through `ggml_view_3d` in the pin's older LFM2 graph); against the
 patched clone it reserves cleanly. Pin/master backtrace call sites differ — re-verify the
 repro after every submodule bump.
+
+## 2026-09-18 (late, session 2) — exactness falsified as a harness bug; the m-law
+
+Goal (next actions 2–3 of the previous resume): the depth × ubatch × snapshot matrix and
+the chunk-boundary hypothesis test. Both executed — and the outcome falsified the premise.
+
+**Source trace first** (pin @ `0e8c83e51`): GDN CPU kernel `ggml-cpu/ops.cpp:10752` is
+strictly sequential per token and writes snapshot slot `n_tokens−1−t` per step (only
+`min(n_seq_tokens, K)` planes per ubatch); conv writes in `delta-net-base.cpp:479` map
+slot t → state `(n_seq_tokens−(ch−1)+t)…` clamped at 0; LFM2 shortconv (lfm2.cpp:211)
+writes true per-token planes (guard `causal_attn` holds — LFM2 not in the non-causal list,
+no `attention.causal` key in the gguf); `seq_rm` rollback needs depth ≤ n_rs_seq, is
+single-use, and `rm_all` resets `rs_idx`; restore reads plane `rs_idx` via the
+`s_copy` gather. During the trace: **`bmoe-rsbench diverge` was self-defeating** — its
+continuation went through `greedy_generate`, which opened with a full `seq_rm(-1,-1)`,
+wiping the pending rollback. Every prior exactness datum was that artifact.
+
+**Rewritten tool** (`tools/rsbench.cpp`): `diverge` = one matched-feed cell (identical
+token feeds both sides, pending rollback never cleared, reference continues instead of
+re-clearing); `sweep` = mode {single, batched} × d_rm {1,3,8,24} × m {0,4} matrix, per-cell
+predicted-vs-observed, plus a sensitivity probe (full-clear+re-prefill vs continuation)
+that qualifies each prompt. Process lessons: stdout must be line-buffered (two 600 s
+timeouts lost their buffered output before the fix); `pgrep -f` self-match false-positived
+(the known trap from the evening entry); the counting-chain prompt is state-INSENSITIVE
+(14/14 EXACT cells on Qwen3.5 including full-clear probes — EXACT there is uninformative);
+the fox prompt is sensitive.
+
+**The m-law (matched-feed, sensitive prompts, both families, pin and clone agree):**
+
+- m=0: EXACT everywhere tested on qwen35 (d=1,3,8,24; single AND batched rm — the
+  predicted single-mode conv collapse is falsified; the clamp yields oldest-window, which
+  for slots 0/1 is correct) and on lfm2moe at d=1,3,24.
+- m≥1: DIFFER everywhere, both families, all depths, both rm shapes. Mechanism:
+  single-token steps refresh only plane 0; planes d≥1 keep last-multi-token-ubatch values
+  (stale by m). This is the real edit-turn shape of the server.
+- lfm2moe m=0 d=8: DIFFER identically in both rm shapes (`100` vs `99`) — residual anomaly,
+  OPEN (next action 2).
+- Upstream's fixture test passes because it never generates before the rollback (m=0 by
+  construction) and (checkpoint path) both sides read the same planes; PR #29085's lfm2
+  rows never exercised m≥1 either.
+
+Evidence files (regenerable, ephemeral): `/tmp/sweep-q35.txt` (std matrix, insensitive
+prompt), `/tmp/sweep-q35-fox.txt`-equivalent console output, `/tmp/sweep-lfm-std.txt`,
+`/tmp/sweep-lfm-fox.txt`, `/tmp/reserve-pin.txt`; run via
+`/tmp/bmoe-rsbench-clone sweep ~/llm/models/<model>.gguf [fox]` (clone-linked) or
+`./build/tools/bmoe-rsbench` (pin-linked). Clone runner compile line in Artifacts above.
+
+**Docs:** ADR-004 Addendum 2 written (falsification + law + candidate upstream fix:
+ubatch-replay-before-restore or per-token plane maintenance); Addendum 1's exactness claim
+struck; ADR-001 §Context 2 superseded; docs/serve.md and CHANGELOG 0.24.2 corrected.
+Gates all green after the rewrite: clean build, 13/13 ctest, `reserve` still exit 134 on
+the pin. No code-behavior change anywhere in the engine — the falsification changes
+documentation and the upstream plan, not this repo's defaults (`--rs-seq` stays off for
+the staleness reason now, not the non-exactness reason before).
