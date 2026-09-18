@@ -64,6 +64,21 @@ Semantic Versioning.
   ~26 tokens reusing ~1700 in ~1.6 s instead of ~40 s of full prefill. Exact-match only:
   edited or regenerated answers, turns already containing `<think>`, and unknown replies
   are never rewritten — they fall back to the safe full re-prefill. Off by default.
+- **The LFM2 graph-reserve blocker is root-caused and upstreamed.** The crash
+  (`GGML_ASSERT(obj_new)`, needed 836640 vs available 836272 — one ggml_tensor object
+  short) reproduces on pristine upstream master and is a budget-list omission:
+  `graph_max_nodes()` gives the linear-attention family an elevated node budget, but the
+  LFM2 archs — though on the rollback allowlist — were missing from it. Fix contributed
+  upstream ([ggml-org/llama.cpp#29085](https://github.com/ggml-org/llama.cpp/pull/29085):
+  2-line arch addition plus lfm2/lfm2moe rows for `test-recurrent-state-rollback`, which
+  previously never exercised either arch; 7/7 with the fix). Routing supersedes ADR-004
+  §2: the PR came from the user's own fork per mainline contribution flow, not from
+  `Helldez/llama.cpp` — the Helldez fork-branch option remains reserved for anything that
+  must touch the submodule pin before an upstream merge. Also re-proven on current
+  upstream: snapshot restore is still not bit-exact on both gated-delta-net families
+  (qwen35 and lfm2 now measured, at rollback depths 3 and 8) — `--rs-seq` stays
+  default-off. Evidence: new `tools/bmoe-rsbench` (`reserve` / `diverge`), built with
+  `-DBMOE_BUILD_TOOLS=ON`.
 - **`scripts/bench-features.sh`: one-command before/after proof of the residency features.**
   Serves the model through the bridge on an isolated port (default 8019; a server on another
   port is untouched), runs a 3-turn chain with verified answers (a faster run with wrong answers

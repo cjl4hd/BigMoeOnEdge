@@ -6,49 +6,55 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-18 (night). Phase: hybrid session residency — shipped,
-proven with a real client (aider); **stacked PR held until serve-bridge PR #197
-merges** (still OPEN as of 2026-09-18 night).*
-*One-line status: aider confirmed the ladder — non-edit turns prefill 16–18 tokens
-(`n_reused` 587 → 1243), edit turns full-clear by design; blockers documented in
-ADR-004 with the upstream-PR routing decided; server on LFM2.5 :8017 with `--auto-echo`.*
+*Resume last rewritten: 2026-09-18 (late night). Phase: hybrid residency blockers —
+reserve crash root-caused and upstreamed (PR #29085); bit-exact restore work started
+(phase 2) with fresh baselines.*
+*One-line status: the LFM2 reserve crash is a 2-line budget-list omission, upstreamed
+with lfm2/lfm2moe rollback tests (7/7); snapshot restore proven non-exact on BOTH GDN
+families at depths 3 and 8; stacked PR #197 still held (OPEN).*
 
 ## State delta (this session)
 
-- **Residency features shipped and proven:** append-only hybrid reuse (`e930b4d`),
-  warmup replay (`2cb9cd3`), `--rs-seq` wired but off (`63768e7`), `preserve_reasoning`
-  (`d83d153`), bridge `--auto-echo` + aider history canonicalization (`57c654e`,
-  `39cc706`). All measured with verified answers; tables in `docs/serve.md`.
-- **Confirmed aider telemetry (the design point):** mixed edit/non-edit session on
-  LFM2.5 — edits: 426/815 prefilled, 0 reused (full clear, ~18/36 s); follow-ups:
-  **18/16 prefilled, 587/1243 reused, ~0.8 s prefill**. Guidance: batch edits, ask
-  follow-ups freely.
-- **Two aider behaviors found:** boilerplate-on-newest-turn (fixed bridge-side via
-  request-independent canonicalization — strip from all user turns, relocate into the
-  system prompt once) and edit-turn file re-adds (inherent: new file content must be
-  seen; a hybrid cannot rewind over a changed span).
-- **Blockers documented and routed (ADR-004):** hybrid edit-turn rewind waits on two
-  upstream llama.cpp defects — (1) lfm2moe graph-reserve crash with snapshots (~368-byte
-  node-pool shortfall) → **upstream PR against ggml-org/llama.cpp**; (2) non-bit-exact
-  snapshot restore (`40` vs `420` under greedy decode) → **not forked now**; any future
-  fork experiment goes as a 1-commit branch on `Helldez/llama.cpp` (the submodule
-  remote) with maintainer agreement — not a new personal fork.
-- **Lifecycle consolidated** to a single `PROGRESS.md` (this file) per user choice.
+- **Reserve crash root-caused and upstreamed:** reproduces on pristine upstream master —
+  `graph_max_nodes()` gives the linear-attention family an elevated node budget and the
+  LFM2 archs (though on the rollback allowlist) were missing from it → default bucket,
+  exactly one `ggml_tensor` object (368 B) short. **PR open:
+  [ggml-org/llama.cpp#29085](https://github.com/ggml-org/llama.cpp/pull/29085)** from the
+  user's fork `cjl4hd/llama.cpp`, branch `fix/lfm2-rs-reserve` (2-line arch addition plus
+  lfm2/lfm2moe rows for `test-recurrent-state-rollback`; 7/7 with the fix — that suite
+  had never exercised either arch).
+- **Exactness re-proven wider:** `bmoe-rsbench diverge` shows DIFFER on both real GDN
+  models (Qwen3.5-9B, LFM2.5-8B) at rollback depth 3 (test-parity) and 8 alike; restored
+  streams degenerate (echo-loops/repetition), sometimes starting correct →
+  position-dependent corruption, consistent with the chunk-boundary hypothesis.
+- **New diagnostic tool:** `tools/bmoe-rsbench` (`reserve` / `diverge`), engine-shaped
+  context (n_ubatch = n_batch, use_extra_bufts=false), opt-in via `-DBMOE_BUILD_TOOLS=ON`.
+  A/B proof: exit 134 against our unfixed pin, clean reserve against the patched clone.
+  Pin backtrace differs from master's (`ggml_view_3d` vs `ggml_add` site) — the pin's LFM2
+  graph is older; re-verify after every submodule bump.
+- **Routing record:** ADR-004 addendum — mainline PRs go via the user's own fork
+  (`cjl4hd`) per the normal contribution flow; the Helldez 1-commit fork-branch option
+  stays reserved for anything that must touch the submodule pin before an upstream merge.
+  CHANGELOG entry under 0.24.2 Added.
+- Earlier this arc (unchanged): append-only hybrid reuse (`e930b4d`), warmup replay
+  (`2cb9cd3`), `--rs-seq` wired but off (`63768e7`), `preserve_reasoning` (`d83d153`),
+  bridge `--auto-echo` + aider canonicalization (`57c654e`, `39cc706`); aider telemetry
+  confirmed the ladder (follow-ups 16–18 prefilled / 587→1243 reused / ~0.8 s; edits
+  full-clear by design). Lifecycle consolidated to this single file.
 
 ## Artifacts touched (this session)
 
 | File | What |
 |---|---|
-| `core/src/engine/session.cpp` | append-reuse + mirror poisoning; `preserve_reasoning` → template kwargs |
-| `core/include/bmoe/{config.h,session.h}`, `cli/main.cpp` | `n_rs_seq` / `preserve_reasoning` plumbing (`--rs-seq` flag) |
-| `scripts/bmoe-serve.py` | per-request `think`/`preserve_reasoning`; `--auto-echo` (registry + rewrite + canonicalization); `BMOE_DEBUG_ECHO` payload capture |
-| `scripts/bench-features.sh` | before/after proof of warmup / echo / `--rs-seq`, verified answers |
-| `docs/adr/001..004`, `docs/README.md` | decisions + index |
-| `docs/serve.md`, `docs/telemetry.md`, `CHANGELOG.md` | gates, request fields, measured tables |
-| this file (consolidated from `SESSION_SUMMARY.md` + `RE_PROGRESS.md` + `PROGRESS.history.md`) | lifecycle |
+| (fork) `cjl4hd/llama.cpp` branch `fix/lfm2-rs-reserve` | the upstream PR (llama-context.cpp + tests/CMakeLists.txt) |
+| `tools/rsbench.cpp`, `tools/CMakeLists.txt` | new `bmoe-rsbench` diagnostic (the one llama-linked tool, opt-in) |
+| `docs/adr/004` | addendum: root cause, PR link, wider exactness proof |
+| `CHANGELOG.md` | reserve-fix + exactness entry under 0.24.2 Added |
+| this file | resume rewrite + history entry |
+| clone `~/git/llama.cpp` | upstream work area (origin=cjl4hd, upstream=ggml-org, helldez=pin source); fixture models under `build/tests/test-models/` |
 
 Branch `feat/session-residency` (stacked on `feat/serve-bridge-arm64`), pushed to
-`fork` through `39cc706`. Tags: `progress/2026-09-17-residency-warmup`,
+`fork`. Tags: `progress/2026-09-17-residency-warmup`,
 `progress/2026-09-17-snapshot-rollback`, `progress/2026-09-18-reasoning-echo`.
 
 ## Environment state
@@ -65,10 +71,15 @@ Branch `feat/session-residency` (stacked on `feat/serve-bridge-arm64`), pushed t
   `feat/serve-bridge-arm64`), `fork` = cjl4hd/BigMoeOnEdge (push target); `gh` authed
   as `cjl4hd`. Submodule: `Helldez/llama.cpp` @ `0e8c83e51` (one sanctioned expert-hook
   commit on upstream).
+- **llama.cpp work area**: `~/git/llama.cpp` — fork `cjl4hd/llama.cpp` (origin),
+  `upstream` = ggml-org, `helldez` = pin archaeology. Release build with fixture models;
+  regenerate via `cmake --build build -j4 --target test-llama-archs &&
+  ./build/bin/test-llama-archs -o build/tests/test-models/`.
 - **aider scratch repo**: `~/aider-test` (planted `a - b` bug in `calculator.py`).
 - Untracked, NOT ours: `.opencode/`, `bmoe-arm64*`, `opencode.json`, `.aider*`, logs.
-- Ephemeral: `/tmp/bmoe-serve.log`, `/tmp/bmoe-autoecho.log`, `/tmp/bmoe-reqs.jsonl`
-  (only when `BMOE_DEBUG_ECHO=1`), `/tmp/bf-*` bench outputs — all regenerable.
+- Ephemeral: `/tmp/bmoe-serve.log`, `/tmp/bmoe-reqs.jsonl` (only when `BMOE_DEBUG_ECHO=1`),
+  `/tmp/bf-*` bench outputs, `/tmp/rsbench*.err` (repro evidence; `/tmp/rsbench.cpp`
+  superseded by `tools/rsbench.cpp`) — all regenerable.
 
 ## Open questions / blocked items
 
@@ -76,20 +87,29 @@ Branch `feat/session-residency` (stacked on `feat/serve-bridge-arm64`), pushed t
    fork main → rebase `feat/session-residency` (serve-bridge commits collapse) →
    `gh pr create --repo Helldez/BigMoeOnEdge --base main --head cjl4hd:feat/session-residency`.
    Fallback if #197 stalls: fork-internal PR (`--repo cjl4hd --base feat/serve-bridge-arm64`), retarget later.
-2. **Reserve-crash upstream PR** (ADR-004 §1): drafted against ggml-org/llama.cpp, not
-   yet written.
-3. Bit-exact snapshot restore: watch #25913 + `[EXPERIMENTAL]` markers; then flip
-   `--rs-seq` default (ADR-001 §2, ADR-004 §2).
+2. **PR #29085 (reserve fix) awaits upstream CI/review.** When merged it reaches this
+   dependency only via a submodule bump — the current pin is unfixed (rsbench proves it
+   aborts), so do NOT enable `--rs-seq` until the bump lands, and re-run the byte-identity
+   gates after it (ADR-001's bump rule).
+3. **Bit-exact restore (phase 2, in progress per user decision):** root-cause the GDN
+   divergence (chunk-boundary hypothesis first), then prototype chunk-aligned snapshots +
+   partial-chunk replay. Success = byte-exact streams across the depth×ubatch matrix.
+   The clone is the work area; upstream remains the shipping vehicle; Helldez fork-branch
+   only if something must bridge the pin pre-merge (needs agreement, AGENTS.md #1).
 
 ## Next actions (ordered)
 
-1. **Watch PR #197**; when merged, execute the stacked-PR plan (Open questions 1).
-2. **Draft the lfm2moe reserve-fix PR** to ggml-org/llama.cpp (Open questions 2).
-3. **Measure Ling-mini edit-turn reuse** with captured aider payloads — the free
+1. **Watch #29085 and #197** (`gh pr view 29085 --repo ggml-org/llama.cpp`); execute the
+   stacked-PR plan when #197 merges; do the bump + gates when #29085 merges.
+2. **Build the divergence-position matrix** (phase 2): extend `bmoe-rsbench` with a sweep
+   over rollback depth × ubatch width × snapshot count on both GDN families, byte-compare.
+3. **Chunk-boundary hypothesis test:** instrument snapshot/restore in the clone to log
+   chunk positions at snapshot vs restore; predict EXACT/DIFFER per cell, check the matrix.
+4. **Measure Ling-mini edit-turn reuse** with captured aider payloads — the free
    transformer rewind (ADR-004 Consequences).
-4. **Opencode re-test** with `--auto-echo` on LFM2.5 — stable tool-schema prefix should
+5. **Opencode re-test** with `--auto-echo` on LFM2.5 — stable tool-schema prefix should
    reuse even better than aider.
-5. **Daily driver**: Ling-mini on :8017 when the benchmarking session ends.
+6. **Daily driver**: Ling-mini on :8017 when the benchmarking session ends.
 
 ## Resume gates (all must assert positives)
 
@@ -99,6 +119,7 @@ Branch `feat/session-residency` (stacked on `feat/serve-bridge-arm64`), pushed t
    `git log --oneline -1` = newest residency-arc commit.
 4. `curl -fsS -m 3 http://127.0.0.1:8017/v1/models` → the `bmoe-local` JSON.
 5. `bash -n scripts/bench-features.sh && python3 -m py_compile scripts/bmoe-serve.py` → silent.
+6. `test -x build/tools/bmoe-rsbench` → exists (needs `-DBMOE_BUILD_TOOLS=ON`).
 
 If a gate fails: re-derive from artifacts (git log, docs/adr, history below) before
 continuing. Never weaken a gate to make it pass.
@@ -308,3 +329,56 @@ revisit: upstream chunk-boundary snapshots or equivalent.
 **Consolidation (user choice):** `PROGRESS.history.md` merged back into `PROGRESS.md`
 (resume section + history in one file); `PROGRESS.history.md` removed. ADR-004 indexed
 in docs/README.md.
+
+## 2026-09-18 (late) — Blockers phase: reserve root-cause + upstream PR; exactness baselines
+
+User decision: attempt ALL blockers including bit-exact restore; route the reserve fix as
+a mainline contribution; the pin stays untouched and bumpable throughout (work happens in a
+separate clone, never in `third_party/`).
+
+**Setup.** `ggml-org/llama.cpp` forked to `cjl4hd/llama.cpp`; clone at `~/git/llama.cpp`
+(origin=cjl4hd, upstream=ggml-org, `helldez` remote added for pin archaeology). Release
+build with tests; rollback-suite fixture models generated via
+`cmake --build build -j4 --target test-llama-archs && ./build/bin/test-llama-archs -o build/tests/test-models/`.
+
+**Repro A — the reserve crash.** First probe (upstream-default shapes: ubatch 512,
+n_rs_seq 8) did **not** crash — the shortfall is graph-shape dependent. Mirroring the
+engine's exact context shape (n_ctx = n_batch = n_ubatch = 2048, `use_extra_bufts=false`,
+n_rs_seq 64) reproduced it byte-for-byte on pristine master `4fea119de`:
+`needed 836640, available 836272`, `GGML_ASSERT(obj_new)` — the same numbers as on our pin,
+proving it is not a pin artifact.
+
+**Root cause.** `llama_context::graph_max_nodes()` buckets node budgets by arch; the
+linear-attention family gets `max(n_tokens*40, 32*n_tensors)` because GDN graphs with
+snapshot planes need the headroom. LFM2/LFM2MOE are on the rollback allowlist
+(`llm_arch_supports_rs_rollback`) but missing from that bucket → default
+`max(1024, 8*n_tensors)`, which their snapshot graph exceeds by exactly one `ggml_tensor`
+object (368 B = GGML_OBJECT_SIZE + GGML_TENSOR_SIZE). Invariant to ctx/ubatch/budget
+because the budget itself scales with those.
+
+**Fix and PR.** Two lines (add the archs to the bucket) plus registration of the `lfm2` /
+`lfm2moe` fixture models for `test-recurrent-state-rollback` — the generator already
+produced them, but no rollback test had ever exercised either arch. Suite passes 7/7
+(qwen35, nemotron-h, dsv4, kimi-k3 + new lfm2, lfm2moe). Committed `74e1ee6de`, pushed to
+the fork, **PR opened: ggml-org/llama.cpp#29085**. Note: an outside contributor cannot
+push a branch to `Helldez/llama.cpp`; mainline PRs therefore go via the user's own fork.
+The Helldez 1-commit fork-branch option stays reserved for anything that must bridge the
+submodule pin before upstream merges (needs maintainer agreement, AGENTS.md #1).
+
+**Repro B — exactness baselines (phase 2 open).** New `diverge` mode: fresh greedy decode
+vs greedy decode after a snapshot rollback, against an untouched reference context.
+- Qwen3.5-9B: DIFFER at rollback depth 8 (restored stream began correct — `hello world` —
+  then degenerated into `<|im_start|>` repetition).
+- LFM2.5-8B: DIFFER at depths 8 and 3 (3 = the upstream fixture test's parity depth).
+  Restored streams degenerate into prompt-tail echo loops.
+- Position-dependence (sometimes-correct start) is consistent with the chunk-boundary
+  hypothesis; the depth × ubatch matrix is the next artifact.
+- (A fixture-model probe is invalid: synthetic test vocabs do not support
+  `llama_tokenize` — the real models above are the evidence.)
+
+**Tooling.** `tools/rsbench.cpp` → `bmoe-rsbench` (engine-shaped context, public API
+only), the deliberate exception to the tools' no-llama rule, opt-in via
+`-DBMOE_BUILD_TOOLS=ON`. A/B proof in one command: against our unfixed pin it aborts
+(exit 134, backtrace through `ggml_view_3d` in the pin's older LFM2 graph); against the
+patched clone it reserves cleanly. Pin/master backtrace call sites differ — re-verify the
+repro after every submodule bump.
