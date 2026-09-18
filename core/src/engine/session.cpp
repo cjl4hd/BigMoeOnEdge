@@ -336,6 +336,10 @@ struct Session::Impl {
     // and prefill only the diverging suffix instead of re-running the whole conversation.
     std::vector<common_chat_msg> chat_history;
     std::vector<llama_token> kv_tokens;
+    // Effective recurrent-snapshot budget (0 = rollback unsupported or disabled). Read back after
+    // context creation because llama.cpp clamps it to 0 for archs without rollback support — the
+    // gate the hybrid clear-block below keys on.
+    uint32_t n_rs_seq = 0;
 
     // Route trace (diagnostics): null unless requested AND streaming is on — there is no routing
     // to trace otherwise.
@@ -722,9 +726,20 @@ std::unique_ptr<Session> Session::open(const SessionConfig & cfg,
     // the sequence, which would hand back exactly the decode the speculation just saved.
     if (cfg.spec.enabled()) cparams.n_rs_seq = (uint32_t) cfg.spec.draft_max;
 
+    // Session residency on hybrids needs the same mechanism: without snapshots the recurrent side
+    // cannot rewind at all (seq_rm returns false), so every non-append turn had to full-clear.
+    // With a snapshot pool, short rewinds restore per-token state and the generic diff path below
+    // can serve hybrids the way it serves transformers: append reuse, partial reuse within the
+    // budget, full clear beyond it. LFM2.5-class archs without upstream rollback support are
+    // clamped to 0 inside llama.cpp, and llama_n_rs_seq() reads back the effective value.
+    if (cparams.n_rs_seq == 0 && cfg.n_rs_seq > 0)
+        cparams.n_rs_seq = (uint32_t) cfg.n_rs_seq;
+
     llama_context * ctx = llama_init_from_model(model, cparams);
     if (!ctx) return fail("failed to create context");
     im.ctx.reset(ctx);
+    // The requested budget may have been clamped (arch without rollback support reads back 0).
+    im.n_rs_seq = llama_n_rs_seq(ctx);
     llama_set_n_threads(ctx, cfg.n_threads, cfg.n_threads);
 
     // The MTP draft context: same model, same eval callback, but ctx_type = MTP so llama.cpp builds
@@ -1329,8 +1344,15 @@ RunResult Session::generate(const GenerateRequest & req,
     // prefix, the common case) then skips its whole prefill without ever rewinding cell state.
     // A failed/cancelled append turn poisons the mirror on purpose — cells may sit past its end —
     // which the mirror==0 condition turns into the unconditional clear.
+    // Without recurrent-state snapshots (n_rs_seq == 0: unsupported arch or budget disabled) a
+    // hybrid cannot rewind its state, so any turn that is not a pure APPEND must full-clear: the
+    // diff path below would seq_rm a mid-conversation position, the recurrent side would refuse,
+    // and KV vs cells would diverge. With a snapshot pool the generic diff path is safe for
+    // hybrids too — a rewind within the budget restores from snapshots, one beyond it fails
+    // seq_rm and falls back to the same full clear — and the append shortcut below keeps working
+    // exactly as before.
     const bool is_hybrid = llama_model_is_hybrid(im.model.get()) || llama_model_is_recurrent(im.model.get());
-    if (is_hybrid) {
+    if (is_hybrid && im.n_rs_seq == 0) {
         const bool append_ok = chat_on && req.n_predict > 0 && !im.kv_tokens.empty() &&
                                im.kv_tokens.size() < tokens.size() &&
                                std::equal(im.kv_tokens.begin(), im.kv_tokens.end(), tokens.begin());

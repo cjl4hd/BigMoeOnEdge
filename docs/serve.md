@@ -36,6 +36,9 @@ What the bridge does with client fields:
   (floor 256) rather than failing — and if the prompt alone overflows, the error surfaces,
   because that genuinely needs a shorter conversation.
 - Requests are serialised: the engine is one session, one generation at a time.
+- `think` (default true) toggles reasoning for templates that honor it (`think_ctl: 'template'`,
+  e.g. the qwen35 family). Off means no reasoning span in output or history — cheaper turns and a
+  history the append-reuse path can match. Templates that cannot be silenced (LFM2.5) ignore it.
 - Non-streaming responses carry a `bmoe` object with the `BMOE_DONE` perf block (tok/s, cache
   hit, stall) — the same numbers the CSV sink records. The SSE stream emits only OpenAI-shaped
   chunks: strict client SDKs validate every event, so no vendor-specific events ride the stream.
@@ -71,9 +74,23 @@ client must echo the previous reply verbatim (aider and the bridge do; hand-buil
 not); and any failed, cancelled or overflowed turn resets the mirror so the next turn full-clears —
 cell state may sit past what the mirror describes. Thinking hybrids (LFM2.5) cannot hit this path
 at all: the reasoning tokens live in the cache between the prompt and the answer, but a client
-echoes only the answer, so the render always diverges before the append point. Append reuse on
-hybrids is therefore a property of non-thinking hybrid stacks (e.g. qwen35moe with
-`enable_thinking=false`).
+echoes only the answer, so the render always diverges before the append point. A third blocker is
+template-side: qwen3.5's template silences thinking by baking an empty `<think>` span into the
+generation prompt, so even with thinking off the next turn's re-rendered history (span-less)
+diverges from what was generated (span included). Append reuse on hybrids therefore needs a
+non-thinking stack whose template neither reasons nor bakes the span — rare, and the reason the
+snapshot path below is the general fix.
+
+**Experimental: snapshot-rollback reuse (`--rs-seq N`).** Upstream llama.cpp can snapshot
+recurrent state per token (`n_rs_seq` budget, marked `[EXPERIMENTAL]`), which makes a bounded
+partial `seq_rm` legal: the engine sets the budget at context creation when asked, and the generic
+diff path then serves hybrids like transformers — rewind within budget restores from snapshots,
+beyond it fails `seq_rm` and falls back to the same full clear. Measured on a 9B qwen35 (gated
+delta net) at N=32: reuse engages (`n_reused` > 0 on continuation turns), but restore is **not
+bit-exact** — under greedy decoding the same prompt produces different (and in arithmetic tests,
+contaminated) output depending on whether its prefix was restored or freshly prefilled, most
+likely mid-chunk snapshots of the chunked delta-net. The default is therefore **0 (off)**; the
+flag exists to track the upstream fix, and flipping it on is a deliberate opt-in.
 
 ## Warmup: the first query is cheap too
 

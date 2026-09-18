@@ -365,9 +365,9 @@ class Handler(BaseHTTPRequestHandler):
 
         try:
             if stream:
-                self.handle_stream(req, prompt, n_predict, created, messages=conversation)
+                self.handle_stream(req, prompt, n_predict, created, messages=conversation, think=bool(req.get("think", True)))
             else:
-                self.handle_plain(req, prompt, n_predict, created, messages=conversation)
+                self.handle_plain(req, prompt, n_predict, created, messages=conversation, think=bool(req.get("think", True)))
         except EngineFatal as e:
             if not self.headers.get("Content-Length") or stream:
                 pass  # headers already sent; report as an SSE error below if possible
@@ -375,14 +375,14 @@ class Handler(BaseHTTPRequestHandler):
         except OSError:
             pass  # client socket died mid-response (EPIPE/ECONNRESET); engine already cancelled
 
-    def run_generation(self, prompt, n_predict, messages=None):
+    def run_generation(self, prompt, n_predict, messages=None, think=True):
         """Iterate the engine, mapping deltas to (reasoning, text); cancels on client loss."""
         started = time.time()
         done = {}  # terminal BMOE_DONE of the attempt that actually finished
 
         def _iter(np):
             reasoning, text = [], []
-            for p in engine.request(prompt, np, messages=messages):
+            for p in engine.request(prompt, np, messages=messages, think=think):
                 r, t = p.get("delta_reasoning", ""), p.get("delta_text", "")
                 if r:
                     reasoning.append(r)
@@ -420,7 +420,7 @@ class Handler(BaseHTTPRequestHandler):
                 if messages and not line.get("cancelled"):
                     save_warmup(messages)
 
-    def handle_stream(self, req, prompt, n_predict, created, messages=None):
+    def handle_stream(self, req, prompt, n_predict, created, messages=None, think=True):
         cid = f"chatcmpl-{int(time.time() * 1000)}"
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
@@ -443,7 +443,7 @@ class Handler(BaseHTTPRequestHandler):
             # The engine yields cumulative text; the wire protocol wants DELTAS, so send
             # only the tail past what this stream has already sent.
             sent_r = sent_t = ""
-            for reasoning, text, _ in self.run_generation(prompt, n_predict, messages):
+            for reasoning, text, _ in self.run_generation(prompt, n_predict, messages, think=think):
                 delta = {}
                 if len(reasoning) > len(sent_r):
                     delta["reasoning_content"] = tail_past(sent_r, reasoning)
@@ -472,10 +472,10 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 pass
 
-    def handle_plain(self, req, prompt, n_predict, created, messages=None):
+    def handle_plain(self, req, prompt, n_predict, created, messages=None, think=True):
         try:
             reasoning, text = "", ""
-            for reasoning, text, _ in self.run_generation(prompt, n_predict, messages):
+            for reasoning, text, _ in self.run_generation(prompt, n_predict, messages, think=think):
                 pass
         except (EngineError, EngineFatal) as e:
             self.send_json(502, {"error": {"message": str(e)}})

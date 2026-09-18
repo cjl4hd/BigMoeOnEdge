@@ -24,6 +24,23 @@ Semantic Versioning.
   forwards plain-text OpenAI conversations verbatim (non-text content falls back to the flattened
   prompt path). The assistant commit is skipped for client-history turns: the next request carries
   the authoritative array, so appending the reply would only diverge from it.
+- **Append-only prefix reuse on hybrids.** When a hybrid turn's rendered prompt strictly extends
+  the resident token mirror (client echoed the previous reply verbatim, then added messages), the
+  unconditional hybrid clear is skipped: the diff finds the full prompt resident, no `seq_rm`
+  runs, and cells only grow — a continuation turn skips its whole prefill. Every failure, cancel,
+  overflow and decode-fail path resets the mirror so the next turn full-clears. Measured limits,
+  both structural: LFM2.5-class reasoning lands in the cache between prompt and answer, which no
+  client echoes back, and qwen3.5's template silences thinking by baking an empty `<think>` span
+  into the generation prompt — so the two mainstream hybrid families cannot hit the path today;
+  the mechanism is proven and waiting on templates, not code.
+- **`--rs-seq N`: recurrent-state snapshot budget** (default 0 = off). Wires the engine to
+  upstream's experimental per-token recurrent-state snapshots, which make a bounded partial
+  `seq_rm` legal on hybrids: the generic diff path then serves them like transformers (rewind
+  within budget restores, beyond it falls back to the full clear). Measured on a 9B qwen35:
+  reuse engages, but restore is **not bit-exact** — greedy decoding yields different output for
+  restored vs freshly-prefilled prefixes — so the flag ships off by default and tracks the
+  upstream fix. The bridge's `/v1/chat/completions` also accepts a per-request `think` flag
+  (default true) for templates that honour it.
 - **Warmup: frontload the conversation prefix at server start** (`bmoe-serve.py`). After each
   request the bridge persists the stable prefix (everything but the in-flight user turn) to
   `~/.cache/bmoe-serve/warmup.json` (0600); at startup it replays that prefix through the

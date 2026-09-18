@@ -13,6 +13,7 @@ SessionConfig session_config_from(const RunConfig & cfg) {
     sc.n_ctx = cfg.n_ctx;
     sc.n_batch = cfg.n_ctx;     // one-batch prefill for any prompt that fits the context
     sc.n_ubatch = cfg.n_ubatch; // 0 = follow n_batch; smaller trades prefill speed for memory
+    sc.n_rs_seq = cfg.n_rs_seq; // hybrid snapshot budget; llama.cpp clamps for unsupporting archs
     sc.chatml = cfg.chatml;
     sc.n_expert_used = cfg.n_expert_used; // active-expert (top-k) override; 0 = model default
     sc.compute_trace_layers = cfg.compute_trace_layers;

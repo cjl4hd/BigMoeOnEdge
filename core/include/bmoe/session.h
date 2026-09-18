@@ -41,6 +41,10 @@ struct SessionConfig {
     // throughput for resident compute buffers, which on this engine compete with the expert cache.
     // See RunConfig::n_ubatch.
     int n_ubatch = 0;
+    // Recurrent-state snapshot budget for hybrid/recurrent models. Baked into the llama context at
+    // creation (llama.cpp clamps it to 0 for archs without rollback support). DEFAULT 0: restore is
+    // not bit-exact on current upstream (see RunConfig::n_rs_seq for the measurement).
+    int n_rs_seq = 0;
     bool chatml = false;
     // Active-expert (top-k) override applied at load via a kv_override on the arch-prefixed
     // expert_used_count key. 0 = use the model's own count. See RunConfig::n_expert_used.

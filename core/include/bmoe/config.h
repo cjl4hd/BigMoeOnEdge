@@ -364,6 +364,12 @@ struct RunConfig {
     // Decode is unaffected: a decode graph is one token wide whatever this says. The cost is
     // prefill throughput, which processes a long prompt in more, smaller passes.
     int n_ubatch = 0;
+    // Recurrent-state snapshot budget for hybrid/recurrent models (see session.cpp). Each plane
+    // costs mem_size worth of state (50 MiB/plane on a 9B hybrid at Q4). DEFAULT 0 — measured on
+    // a qwen35 (gated delta net) model, snapshot restore is not bit-exact: under greedy decoding
+    // a restored state produces different tokens than a fresh prefill of the same prefix. Enable
+    // only for experiments; default behaviour is the full-clear fallback.
+    int n_rs_seq = 0;
     bool chatml = false;   // wrap the prompt in the model family's chat turn (arch-aware)
     bool progress = false; // emit machine telemetry (one JSON line per token)
 

@@ -475,6 +475,9 @@ static void print_usage(const char * argv0) {
         "  -n, --n-predict N       tokens to generate (default 128)\n"
         "  -t, --threads N         compute threads (default 4)\n"
         "  -c, --ctx-size N        context size (default 2048)\n"
+        "      --rs-seq N          recurrent-state snapshot budget for hybrids (default 0 = off;\n"
+        "                          upstream restore is not yet bit-exact)\n"
+        "\n"
         "      --ubatch N          widest graph computed at once (0 = as wide as the context).\n"
         "                          Compute buffers are reserved for it, so a smaller value hands\n"
         "                          RAM back to the expert cache at the cost of prefill speed;\n"
@@ -715,6 +718,8 @@ int main(int argc, char ** argv) {
             cfg.n_threads = std::atoi(next("-t"));
         else if (a == "-c" || a == "--ctx-size")
             cfg.n_ctx = std::atoi(next("-c"));
+        else if (a == "--rs-seq")
+            cfg.n_rs_seq = std::atoi(next("--rs-seq"));
         else if (a == "--ubatch")
             cfg.n_ubatch = std::atoi(next("--ubatch"));
         else if (a == "--n-expert-used")
