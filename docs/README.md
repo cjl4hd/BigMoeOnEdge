@@ -33,6 +33,15 @@ for the idea the project is built on.
 | [android-memory.md](android-memory.md) | What reclaims the engine's memory on a phone, which levers exist (almost none), and why the cache hit rate is what the kernel judges you by. |
 | [pressure.md](pressure.md) | Cache policy under memory pressure: why an unaffordable budget starts a reclaim war, why the adaptive governor was retired, and what the fixed `--cache-mb` / `--dense-weights` levers do. |
 
+## Architecture decisions
+
+ADRs record why it is built this way — read one before "fixing" what it decided.
+
+| ADR | Decision |
+|---|---|
+| [adr/001-hybrid-session-reuse-policy.md](adr/001-hybrid-session-reuse-policy.md) | Hybrid sessions: append-only reuse, snapshot rollback off by default, full-clear fallback. |
+| [adr/002-reasoning-echo.md](adr/002-reasoning-echo.md) | `preserve_reasoning`: keep reasoning resident by echoing it back instead of rewinding state. |
+
 ## Measurements
 
 | Doc | What it answers |
