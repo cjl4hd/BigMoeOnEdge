@@ -492,16 +492,21 @@ extends to them naturally.
 Requests (stdin):
 
 ```
-{"cmd":"generate","id":<int>,"prompt":"<string>","n_predict":<int>,"think":<bool>,"clear_kv":<bool>}
+{"cmd":"generate","id":<int>,"prompt":"<string>","n_predict":<int>,"think":<bool>,"preserve_reasoning":<bool>,"clear_kv":<bool>}
 {"cmd":"cancel"}          # interrupt the in-flight generation; the session stays loaded
 {"cmd":"close"}           # end the session (EOF on stdin does the same)
 ```
 
-`prompt` is JSON-escaped (newlines as `\n`); `n_predict`/`think`/`clear_kv` are optional and
-default to the process's flags / `true`. `clear_kv:true` starts a **new chat** (drops the KV and
-the engine-held conversation); `clear_kv:false` **continues** the conversation — send only the new
-user message, the engine re-renders the whole history and reuses the KV prefix (see
-[session.md](session.md)). `cancel` may arrive at any time, including mid-generation.
+`prompt` is JSON-escaped (newlines as `\n`); `n_predict`/`think`/`preserve_reasoning`/`clear_kv` are
+optional and default to the process's flags / `true` / `false` / `true`. `clear_kv:true` starts a
+**new chat** (drops the KV and the engine-held conversation); `clear_kv:false` **continues** the
+conversation — send only the new user message, the engine re-renders the whole history and reuses
+the KV prefix (see [session.md](session.md)). `preserve_reasoning:true` asks the template to keep
+reasoning in re-rendered history turns (LFM2.5's `preserve_thinking` variable): a client that
+echoes the reasoning back inside the assistant content then makes the next render a strict
+extension of what was generated, and the append-reuse path serves a thinking hybrid at
+delta-only prefill. Templates without such a variable ignore the flag.
+`cancel` may arrive at any time, including mid-generation.
 
 Responses (stdout):
 

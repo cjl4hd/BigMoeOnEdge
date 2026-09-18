@@ -299,6 +299,7 @@ struct SessionCmd {
     int id = 0;
     int n_predict = 128;
     bool think = true;
+    bool preserve_reasoning = false;
     bool clear_kv = true;
 };
 
@@ -363,6 +364,7 @@ static int run_session_loop(const RunConfig & cfg,
                 }
                 c.n_predict = json_get_int(line, "n_predict", cfg.n_predict);
                 c.think = json_get_bool(line, "think", cfg.think);
+                c.preserve_reasoning = json_get_bool(line, "preserve_reasoning", false);
                 c.clear_kv = json_get_bool(line, "clear_kv", true);
             } else {
                 continue;
@@ -402,6 +404,7 @@ static int run_session_loop(const RunConfig & cfg,
         req.messages = std::move(cmd.messages);
         req.n_predict = cmd.n_predict;
         req.think = cmd.think;
+        req.preserve_reasoning = cmd.preserve_reasoning;
         req.clear_kv = cmd.clear_kv;
         req.render_text = true; // the line protocol carries the parsed answer on every token
 

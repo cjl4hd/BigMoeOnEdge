@@ -41,6 +41,17 @@ Semantic Versioning.
   restored vs freshly-prefilled prefixes — so the flag ships off by default and tracks the
   upstream fix. The bridge's `/v1/chat/completions` also accepts a per-request `think` flag
   (default true) for templates that honour it.
+- **`preserve_reasoning`: append-reuse for thinking hybrids.** A new request field (session
+  protocol and HTTP bridge) asks the template to keep reasoning in re-rendered history turns
+  (LFM2.5's `preserve_thinking` variable; templates without one ignore the flag). A client that
+  echoes the reply's reasoning back inside the assistant content then makes the next turn's
+  render a strict extension of what was generated, so the append-reuse path — previously limited
+  to non-thinking stacks — serves a thinking hybrid at delta-only prefill. Measured on
+  LFM2.5-8B-A1B: continuation turns prefill 17 tokens (`n_reused` 101 → 235 across the chain)
+  with correct answers, vs a full re-prefill without the echo. Also documented: lfm2moe is on
+  upstream's rollback allowlist but crashes during graph reserve with snapshots enabled —
+  a fixed node-pool overflow, invariant to context/ubatch/budget — recorded as the third
+  upstream gate for hybrid residency.
 - **Warmup: frontload the conversation prefix at server start** (`bmoe-serve.py`). After each
   request the bridge persists the stable prefix (everything but the in-flight user turn) to
   `~/.cache/bmoe-serve/warmup.json` (0600); at startup it replays that prefix through the

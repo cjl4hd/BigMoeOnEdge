@@ -104,6 +104,11 @@ struct GenerateRequest {
     std::vector<ChatTurn> messages;
     int n_predict = 32;
     bool think = true;
+    // Ask the template to keep reasoning in re-rendered HISTORY turns (LFM2.5's
+    // `preserve_thinking`): paired with a client that echoes the reasoning back inside the
+    // assistant content, the next render strictly extends what was generated and the append-reuse
+    // path can serve a thinking model. Templates that have no such variable ignore the flag.
+    bool preserve_reasoning = false;
     bool clear_kv = true;
     // Populate TokenMetrics::text / ::reasoning on every token. Building them means parsing the
     // WHOLE generation so far — the chat parser cannot resume — so it is O(n) per token and O(n²)

@@ -101,7 +101,7 @@ class Engine:
             if line is None or line.startswith(("BMOE_DONE", "BMOE_ERROR")):
                 return
 
-    def request(self, prompt, n_predict, think=True, messages=None):
+    def request(self, prompt, n_predict, think=True, messages=None, preserve_reasoning=False):
         """Yield ('progress', dict) events; the caller consumes until the generator ends.
         Raises EngineError (recoverable) or EngineFatal (restart needed)."""
         rid = self._next_id
@@ -112,6 +112,8 @@ class Engine:
             "n_predict": n_predict,
             "think": think,
         }
+        if preserve_reasoning:
+            payload["preserve_reasoning"] = True
         if messages:
             # Client-owned conversation: the engine renders its chat template over the array
             # and reuses the KV prefix from prior turns (session residency), so the second
@@ -364,10 +366,11 @@ class Handler(BaseHTTPRequestHandler):
         created = int(time.time())
 
         try:
+            preserve = bool(req.get("preserve_reasoning", False))
             if stream:
-                self.handle_stream(req, prompt, n_predict, created, messages=conversation, think=bool(req.get("think", True)))
+                self.handle_stream(req, prompt, n_predict, created, messages=conversation, think=bool(req.get("think", True)), preserve_reasoning=preserve)
             else:
-                self.handle_plain(req, prompt, n_predict, created, messages=conversation, think=bool(req.get("think", True)))
+                self.handle_plain(req, prompt, n_predict, created, messages=conversation, think=bool(req.get("think", True)), preserve_reasoning=preserve)
         except EngineFatal as e:
             if not self.headers.get("Content-Length") or stream:
                 pass  # headers already sent; report as an SSE error below if possible
@@ -375,14 +378,14 @@ class Handler(BaseHTTPRequestHandler):
         except OSError:
             pass  # client socket died mid-response (EPIPE/ECONNRESET); engine already cancelled
 
-    def run_generation(self, prompt, n_predict, messages=None, think=True):
+    def run_generation(self, prompt, n_predict, messages=None, think=True, preserve_reasoning=False):
         """Iterate the engine, mapping deltas to (reasoning, text); cancels on client loss."""
         started = time.time()
         done = {}  # terminal BMOE_DONE of the attempt that actually finished
 
         def _iter(np):
             reasoning, text = [], []
-            for p in engine.request(prompt, np, messages=messages, think=think):
+            for p in engine.request(prompt, np, messages=messages, think=think, preserve_reasoning=preserve_reasoning):
                 r, t = p.get("delta_reasoning", ""), p.get("delta_text", "")
                 if r:
                     reasoning.append(r)
@@ -420,7 +423,7 @@ class Handler(BaseHTTPRequestHandler):
                 if messages and not line.get("cancelled"):
                     save_warmup(messages)
 
-    def handle_stream(self, req, prompt, n_predict, created, messages=None, think=True):
+    def handle_stream(self, req, prompt, n_predict, created, messages=None, think=True, preserve_reasoning=False):
         cid = f"chatcmpl-{int(time.time() * 1000)}"
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
@@ -443,7 +446,7 @@ class Handler(BaseHTTPRequestHandler):
             # The engine yields cumulative text; the wire protocol wants DELTAS, so send
             # only the tail past what this stream has already sent.
             sent_r = sent_t = ""
-            for reasoning, text, _ in self.run_generation(prompt, n_predict, messages, think=think):
+            for reasoning, text, _ in self.run_generation(prompt, n_predict, messages, think=think, preserve_reasoning=preserve_reasoning):
                 delta = {}
                 if len(reasoning) > len(sent_r):
                     delta["reasoning_content"] = tail_past(sent_r, reasoning)
@@ -472,10 +475,10 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 pass
 
-    def handle_plain(self, req, prompt, n_predict, created, messages=None, think=True):
+    def handle_plain(self, req, prompt, n_predict, created, messages=None, think=True, preserve_reasoning=False):
         try:
             reasoning, text = "", ""
-            for reasoning, text, _ in self.run_generation(prompt, n_predict, messages, think=think):
+            for reasoning, text, _ in self.run_generation(prompt, n_predict, messages, think=think, preserve_reasoning=preserve_reasoning):
                 pass
         except (EngineError, EngineFatal) as e:
             self.send_json(502, {"error": {"message": str(e)}})

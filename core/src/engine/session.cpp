@@ -1249,6 +1249,13 @@ RunResult Session::generate(const GenerateRequest & req,
             inputs.add_generation_prompt = true;
             inputs.use_jinja = true;
             inputs.enable_thinking = req.think;
+            // Preserve-reasoning requests ask the template to keep reasoning in re-rendered
+            // history turns (LFM2.5 spells the variable `preserve_thinking`). Combined with a
+            // client echoing the reasoning back inside the assistant content, the next turn's
+            // render strictly extends what was generated and the append-reuse path can serve a
+            // thinking model. Templates without such a variable silently ignore it.
+            if (req.preserve_reasoning)
+                inputs.chat_template_kwargs["preserve_thinking"] = "true";
             // AUTO is what bakes reasoning-stripping into the generated parser grammar. It is set
             // here, before apply — the field defaults to NONE, which produces a content-only
             // grammar that leaves <think> markers in the answer no matter how the parse is wired.

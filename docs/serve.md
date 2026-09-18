@@ -39,6 +39,13 @@ What the bridge does with client fields:
 - `think` (default true) toggles reasoning for templates that honor it (`think_ctl: 'template'`,
   e.g. the qwen35 family). Off means no reasoning span in output or history — cheaper turns and a
   history the append-reuse path can match. Templates that cannot be silenced (LFM2.5) ignore it.
+- `preserve_reasoning` (default false) asks the template to keep reasoning in re-rendered history
+  turns (LFM2.5's `preserve_thinking`). Echo the reply's reasoning back inside the assistant
+  content (`<think>{reasoning}</think>{answer}`) and every following turn becomes an append:
+  measured on LFM2.5, a continuation turn prefills **17 tokens instead of the whole conversation**
+  (`n_reused` grows 101 → 235 → …). Without the echo, the next render diverges at the first
+  reasoning token and the turn re-prefills from there — the fallback is always safe. The bridge
+  response's `reasoning_content` field carries exactly the text to re-embed.
 - Non-streaming responses carry a `bmoe` object with the `BMOE_DONE` perf block (tok/s, cache
   hit, stall) — the same numbers the CSV sink records. The SSE stream emits only OpenAI-shaped
   chunks: strict client SDKs validate every event, so no vendor-specific events ride the stream.
