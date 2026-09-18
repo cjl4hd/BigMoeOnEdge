@@ -1,6 +1,8 @@
 # ADR-002: Reasoning echo for thinking hybrids
 
-**Status:** Accepted (2026-09-17, commit `d83d153`)
+**Status:** Accepted (2026-09-17, commit `d83d153`). *2026-09-18 addendum: the client
+cooperation cost is now optional — the bridge can perform the echo itself, see
+[ADR-003](003-bridge-auto-echo.md).*
 
 ## Context
 
@@ -43,7 +45,7 @@ Control without echo: full clear every turn, as designed.
   rewound; the resident prefix only grows. Decode on LFM2.5 measured ~9.2 tok/s in the
   resident regime.
 - Harder: clients must cooperate (echo reasoning into `content`). No mainstream client
-  does this today; the bridge could auto-inject it, which is unimplemented.
+  does this today; the bridge can do it for them ([ADR-003](003-bridge-auto-echo.md)).
 - Accepted as-is: reasoning tokens stay in context, consuming window and slightly
   conditioning later turns — deliberately chosen over prefill cost. Template-dependent:
   other families need the same `preserve_thinking`-style hook verified before the flag

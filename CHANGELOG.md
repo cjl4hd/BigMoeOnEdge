@@ -52,6 +52,13 @@ Semantic Versioning.
   upstream's rollback allowlist but crashes during graph reserve with snapshots enabled —
   a fixed node-pool overflow, invariant to context/ubatch/budget — recorded as the third
   upstream gate for hybrid residency.
+- **`--auto-echo` on the bridge: append reuse for unmodified OpenAI clients**
+  ([ADR-003](docs/adr/003-bridge-auto-echo.md)). The bridge records each reply's exact
+  `(reasoning, answer)` span and rewrites matching assistant history turns to
+  `<think>reasoning</think>answer` before the engine sees them, so thinking hybrids get
+  delta-only prefill without any client cooperation. Exact-match only: edited or
+  regenerated answers, turns already containing `<think>`, and unknown replies are never
+  rewritten — they fall back to the safe full re-prefill. Off by default.
 - **`scripts/bench-features.sh`: one-command before/after proof of the residency features.**
   Serves the model through the bridge on an isolated port (default 8019; a server on another
   port is untouched), runs a 3-turn chain with verified answers (a faster run with wrong answers

@@ -22,6 +22,8 @@
 # Each scenario prints one markdown table row: T1 prefill | T2 prefill/reused |
 # T3 prefill/reused | T1 tok/s | verdict, and appends a CSV row under BENCH_OUT
 # (default .bench-features). Env overrides: PORT, N_PREDICT (default 64), BENCH_OUT.
+# NOTE: thinking models often need N_PREDICT >= 192 to finish reasoning AND emit the
+# answer — with a smaller budget the reasoning alone consumes it and verification fails.
 #
 # Safety: the global warmup cache (~/.cache/bmoe-serve/warmup.json) is backed up
 # before the first run and restored on exit (including on Ctrl-C); servers and
@@ -87,17 +89,27 @@ json.dump(r.get("bmoe", {}), open(pf, "w"))
 PY
 }
 
-verify() { # $1=reply-file $2=expected content value (exact field match, not substring)
-    grep -q "\"content\": \"$2\"" "$1" 2>/dev/null
+verify() { # $1=reply-file $2=expected content value — content-only, word-boundary match
+    # ("42" must not match "525"; a \\boxed{42} inside trailing reasoning must not fail it)
+    python3 - "$1" "$2" <<'PY'
+import sys, re, json
+try:
+    c = json.load(open(sys.argv[1])).get("content", "")
+except Exception:
+    sys.exit(1)
+sys.exit(0 if re.search(rf"(?<![0-9.]){re.escape(sys.argv[2])}(?![0-9.])", c) else 1)
+PY
 }
 
 # ---- one 3-turn chain, built incrementally (each turn needs the prior reply) -
-# Ground truth: 6*7=42, +10=52, +10=62. Returns 0 iff every answer verified.
+# Ground truth: 6*7=42, 42+10=52, 52+10=62. Each question restates its inputs — a
+# coreference chain ("add 10 again") tests the model's parsing, not the cache. Returns 0
+# iff every answer verified.
 run_chain() { # $1=label $2=echo(0/1)
     local d="$OUT/chain-$1"; rm -rf "$d"; mkdir -p "$d"
     local u1='What is 6 times 7? Answer with just the number.'
-    local u2='Now add 10 to that. Answer with just the number.'
-    local u3='Now add 10 again. Answer with just the number.'
+    local u2='What is 42 plus 10? Answer with just the number.'
+    local u3='What is 52 plus 10? Answer with just the number.'
     local preserve=0; [ "$2" = 1 ] && preserve=1
 
     python3 -c "import json; json.dump([{'role':'user','content':'$u1'}], open('$d/t1.json','w'))"
@@ -111,7 +123,7 @@ a1 = json.load(open(f"{d}/r1.json"))
 asst = f"<think>{a1['reasoning']}</think>{a1['content']}" if echo and a1["reasoning"] else a1["content"]
 json.dump([{"role": "user", "content": "What is 6 times 7? Answer with just the number."},
            {"role": "assistant", "content": asst},
-           {"role": "user", "content": "Now add 10 to that. Answer with just the number."}],
+           {"role": "user", "content": "What is 42 plus 10? Answer with just the number."}],
           open(f"{d}/t2.json", "w"))
 PY
     ask "$d/t2.json" "$d/r2.json" "$d/m2.json" "$preserve" || return 1
@@ -124,9 +136,9 @@ def asst_of(f):
     return f"<think>{a['reasoning']}</think>{a['content']}" if echo and a["reasoning"] else a["content"]
 json.dump([{"role": "user", "content": "What is 6 times 7? Answer with just the number."},
            {"role": "assistant", "content": asst_of("r1.json")},
-           {"role": "user", "content": "Now add 10 to that. Answer with just the number."},
+           {"role": "user", "content": "What is 42 plus 10? Answer with just the number."},
            {"role": "assistant", "content": asst_of("r2.json")},
-           {"role": "user", "content": "Now add 10 again. Answer with just the number."}],
+           {"role": "user", "content": "What is 52 plus 10? Answer with just the number."}],
           open(f"{d}/t3.json", "w"))
 PY
     ask "$d/t3.json" "$d/r3.json" "$d/m3.json" "$preserve" || return 1
@@ -167,14 +179,16 @@ run_scenario() { # $1=scenario-label $2=echo $3=bridge-args $4=engine-args
     stop_server
 }
 
-# Back up the user's warmup cache; restore on any exit path.
+# Back up the user's warmup cache; restore on any exit path. INT/TERM exit first so the
+# EXIT trap runs exactly once — a trap that returns without exiting resumes the script.
 WARMUP_BACKUP=""
 [ -f "$WARMUP_JSON" ] && { WARMUP_BACKUP="$(mktemp)"; cp "$WARMUP_JSON" "$WARMUP_BACKUP"; }
 restore_warmup() {
     if [ -n "$WARMUP_BACKUP" ]; then cp "$WARMUP_BACKUP" "$WARMUP_JSON"; else rm -f "$WARMUP_JSON"; fi
     stop_server
 }
-trap restore_warmup EXIT INT TERM
+trap 'exit 130' INT TERM
+trap restore_warmup EXIT
 
 printf '| scenario | T1 prefill s | T2 prefill s | T2 reused | T3 prefill s | T3 reused | T1 tok/s | verdict |\n|---|---|---|---|---|---|---|---|\n'
 

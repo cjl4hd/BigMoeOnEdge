@@ -130,3 +130,33 @@ discovery: `~/.agents/skills/` was STALE (missing the SOFTWARE_REQUIREMENTS modu
 merge): after merge, sync fork main → rebase `feat/session-residency` onto it (the
 serve-bridge commits collapse into main) → `gh pr create --repo Helldez/BigMoeOnEdge
 --base main`. Fallback documented in PROGRESS.md Open questions if #197 stalls.
+
+## 2026-09-18 (evening) — LFM2.5 matrix, --auto-echo shipped and proven
+
+Followups executed: PR #197 still OPEN (stacked PR remains held). The LFM2.5 bench run
+surfaced three script bugs, each fixed in the script: (1) static "template mentions
+think" probe over-triggered — echo skip is behavioral on reasoning_content; (2) the
+INT/TERM trap returned instead of exiting, so a killed script RESUMED into the next
+scenario as a zombie (cost: it later overwrote the restored warmup.json — user's cached
+LFM2.5 math chain lost; self-regenerates, lesson recorded); (3) the 6*7→+10→+10 chain
+relied on coreference ("add 10 again") which the 1B model parsed as "repeat 52" —
+questions now restate their inputs (6*7=42, 42+10=52, 52+10=62), testing the cache, not
+the parser. Also: thinking models need N_PREDICT≈192 (reasoning alone eats smaller
+budgets — nothing emitted, verification fails regardless of cache behavior).
+
+**LFM2.5 matrix, all verified:** echo-off T2/T3 prefill 2.46/3.59 s (n_reused 0) vs
+echo-on 1.38/1.27 s (n_reused 124/205); warmup rows equal (stale warmup file, mechanism
+proven on Ling-mini); rs-seq-on reproduces the lfm2moe graph-reserve crash at load.
+
+**--auto-echo shipped (ADR-003):** bridge records each reply's exact
+(reasoning, answer) span (cap 16, newest-wins) and rewrites matching assistant history
+turns before the engine sees them. First live test FAILED (n_reused=0) — the rewritten
+spans were stripped by the template unless preserve_thinking is set; auto-echo now
+implies preserve_reasoning. Retest: plain client echoing ONLY answer text got
+n_reused 124 → 205, prefill ~24 tokens/turn, answers 42/52/\boxed{62} all correct.
+Unmodified OpenAI clients now get delta-only prefill on thinking hybrids.
+
+Process notes for future sessions: never `pkill -f` a pattern that matches the invoking
+shell's own command line (killed our own launches twice); after killing a bridge, WAIT
+for the port to actually free (ss -tln) before rebinding — the bind races the dying
+process's TIME_WAIT and the new bridge dies after loading the engine.

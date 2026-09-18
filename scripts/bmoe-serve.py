@@ -353,6 +353,8 @@ class Handler(BaseHTTPRequestHandler):
         if not messages:
             self.send_json(400, {"error": {"message": "messages must not be empty"}})
             return
+        if auto_echo:
+            messages = [auto_echo_turn(m) for m in messages]
 
         # Generous default: thinking models spend completion tokens on reasoning before the
         # answer, and agent clients that never send max_tokens would otherwise get truncated.
@@ -366,7 +368,9 @@ class Handler(BaseHTTPRequestHandler):
         created = int(time.time())
 
         try:
-            preserve = bool(req.get("preserve_reasoning", False))
+            # --auto-echo rewrites history to <think>...</think>answer spans, which only
+            # survive rendering if the template preserves thinking in history turns.
+            preserve = bool(req.get("preserve_reasoning", False)) or auto_echo
             if stream:
                 self.handle_stream(req, prompt, n_predict, created, messages=conversation, think=bool(req.get("think", True)), preserve_reasoning=preserve)
             else:
@@ -383,6 +387,8 @@ class Handler(BaseHTTPRequestHandler):
         started = time.time()
         done = {}  # terminal BMOE_DONE of the attempt that actually finished
 
+        final_reply = {"reasoning": "", "text": ""}
+
         def _iter(np):
             reasoning, text = [], []
             for p in engine.request(prompt, np, messages=messages, think=think, preserve_reasoning=preserve_reasoning):
@@ -391,7 +397,8 @@ class Handler(BaseHTTPRequestHandler):
                     reasoning.append(r)
                 if t:
                     text.append(t)
-                yield "".join(reasoning), "".join(text), p
+                final_reply["reasoning"], final_reply["text"] = "".join(reasoning), "".join(text)
+                yield final_reply["reasoning"], final_reply["text"], p
             done.update(getattr(engine, "last_done", {}))
 
         try:
@@ -421,6 +428,9 @@ class Handler(BaseHTTPRequestHandler):
                 line["msgs"] = len(messages) if messages else 0
                 print(f"[bmoe-serve] TELEMETRY {json.dumps(line, separators=(',', ':'))}", flush=True)
                 if messages and not line.get("cancelled"):
+                    if auto_echo and final_reply["text"]:
+                        RECORDS.append((final_reply["reasoning"], final_reply["text"]))
+                        del RECORDS[:-MAX_RECORDS]
                     save_warmup(messages)
 
     def handle_stream(self, req, prompt, n_predict, created, messages=None, think=True, preserve_reasoning=False):
@@ -508,8 +518,39 @@ class Handler(BaseHTTPRequestHandler):
         })
 
 
+# ---- --auto-echo: reasoning re-embedding for unmodified clients --------------
+# Most recent (reasoning, answer) spans the model actually generated, newest last.
+# Auto-echo rewrites assistant history turns to the exact generated span so the next
+# render extends the resident mirror (append reuse); an answer the bridge has never
+# seen (edited, regenerated) does not match and falls back to the safe full re-prefill.
+RECORDS = []
+MAX_RECORDS = 16
+
+def find_recorded_reply(answer):
+    a = (answer or "").strip()
+    if not a:
+        return None
+    for reasoning, text in reversed(RECORDS):
+        if text.strip() == a:
+            return reasoning, text
+    return None
+
+def auto_echo_turn(m):
+    if m.get("role") != "assistant" or not isinstance(m.get("content"), str):
+        return m
+    if "<think>" in m["content"]:
+        return m
+    rec = find_recorded_reply(m["content"])
+    if rec is not None and rec[0]:
+        reasoning, answer = rec
+        return {**m, "content": f"<think>{reasoning}</think>{answer}"}
+    rc = m.get("reasoning_content")
+    if rc:
+        return {**m, "content": f"<think>{rc}</think>{m['content']}"}
+    return m
+
 def main():
-    global engine, model_id, max_tokens_limit, model_file
+    global engine, model_id, max_tokens_limit, model_file, auto_echo
     ap = argparse.ArgumentParser(description="OpenAI-compatible bridge over bmoe-cli --session")
     ap.add_argument("--engine", default=None,
                     help="engine binary; default: $BMOE_ENGINE, else the host build, else a bmoe-cli beside this script")
@@ -523,11 +564,14 @@ def main():
     ap.add_argument("--ready-timeout", type=float, default=120.0)
     ap.add_argument("--no-warmup", action="store_true",
                     help="skip replaying the saved conversation prefix into KV at startup")
+    ap.add_argument("--auto-echo", action="store_true",
+                    help="re-embed each reply's reasoning into assistant history turns (<think>...</think>answer), so thinking models hit append reuse without client support")
     ap.add_argument("--engine-args", default="",
                     help="extra engine args as one quoted string, e.g. '--moe-stream --ctx-size 4096'")
     args = ap.parse_args()
     model_id = args.model_id
     max_tokens_limit = args.max_tokens
+    auto_echo = args.auto_echo
 
     here = Path(__file__).resolve().parent
 

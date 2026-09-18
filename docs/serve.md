@@ -46,6 +46,10 @@ What the bridge does with client fields:
   (`n_reused` grows 101 → 235 → …). Without the echo, the next render diverges at the first
   reasoning token and the turn re-prefills from there — the fallback is always safe. The bridge
   response's `reasoning_content` field carries exactly the text to re-embed.
+- With `--auto-echo` the bridge does that re-embedding itself ([ADR-003](adr/003-bridge-auto-echo.md)):
+  assistant history turns matching a reply the bridge generated are rewritten to the exact
+  generated span, so unmodified OpenAI clients get the same append reuse. Exact-match only —
+  edited or regenerated answers fall back to the safe full re-prefill.
 - Non-streaming responses carry a `bmoe` object with the `BMOE_DONE` perf block (tok/s, cache
   hit, stall) — the same numbers the CSV sink records. The SSE stream emits only OpenAI-shaped
   chunks: strict client SDKs validate every event, so no vendor-specific events ride the stream.
@@ -180,6 +184,18 @@ Measured on Ling-mini-2.0 (same host as the table above):
 Warmup cuts the first turn's prefill ~35×; the echo scenario skipped (Ling-mini does not think);
 `--rs-seq` is a verified no-op on a pure transformer — the flag only engages on hybrids, where
 the script's answer verification is what guards against upstream's non-bit-exact restore.
+
+Same script, thinking hybrid (LFM2.5-8B-A1B, `N_PREDICT=192` — reasoning needs headroom):
+
+| scenario | T2 prefill s | T2 reused | T3 prefill s | T3 reused | verdict |
+|---|---|---|---|---|---|
+| echo-off | 2.46 | 0 | 3.59 | 0 | ok (full clear every turn) |
+| echo-on | **1.38** | 124 | **1.27** | 205 | ok (append reuse on a thinking hybrid) |
+
+The `--rs-seq` rows reproduce the documented lfm2moe graph-reserve crash at load — the script
+reports the engine death instead of hiding it. Thinking models also expose a benchmarking trap
+the script now documents: with a small completion budget the reasoning consumes it and no answer
+is ever emitted, so verification fails regardless of cache behavior.
 
 ## Memory budget on the host
 
