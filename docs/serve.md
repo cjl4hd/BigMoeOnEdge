@@ -155,6 +155,32 @@ Reading the numbers:
   tool-call editing completed, but at ~1B-class quality the model hallucinated tool output —
   treat these models as Q&A/drafting engines, not autonomous agents.
 
+### Measuring the features: `scripts/bench-features.sh`
+
+One command re-proves the residency features on any model: it serves through the bridge on an
+isolated port (default 8019 — a daily driver on another port is never touched), runs a 3-turn
+arithmetic chain with **verified answers** (42/52/62; a faster run with wrong answers reports
+FAIL, never a win), and prints one markdown row per feature off vs on:
+
+- **warmup** — `--no-warmup` vs the startup replay (the first chain seeds the warmup file).
+- **reasoning echo** — `preserve_reasoning` with the reply's reasoning re-embedded as
+  `<think>…</think>answer`. Skipped *behaviorally* when the model emits no `reasoning_content`
+  (a template merely mentioning thinking is not evidence).
+- **`--rs-seq`** — snapshot rollback, answers verified against the fresh-prefill ground truth.
+
+Measured on Ling-mini-2.0 (same host as the table above):
+
+| scenario | T1 prefill s | T2 prefill s | T2 reused | T3 prefill s | T3 reused | T1 tok/s | verdict |
+|---|---|---|---|---|---|---|---|
+| warmup-off | 2.19 | 0.90 | 34 | 1.10 | 61 | 9.4 | ok |
+| warmup-on | **0.06** | 0.72 | 34 | 0.71 | 61 | **16.1** | ok |
+| rs-seq-off | 0.07 | 0.71 | 34 | 0.69 | 61 | 13.4 | ok |
+| rs-seq-on | 0.06 | 0.74 | 34 | 0.71 | 61 | 15.9 | ok |
+
+Warmup cuts the first turn's prefill ~35×; the echo scenario skipped (Ling-mini does not think);
+`--rs-seq` is a verified no-op on a pure transformer — the flag only engages on hybrids, where
+the script's answer verification is what guards against upstream's non-bit-exact restore.
+
 ## Memory budget on the host
 
 Compute buffers are reserved for the widest graph, and the dominant term scales with

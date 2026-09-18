@@ -1,8 +1,10 @@
-# RE_PROGRESS — append-only evidence log
+# PROGRESS.history — append-only evidence log
 
 Long-form narrative of what was done, when, with what artifacts. Newer entries at the
-bottom; never rewrite an entry — falsify explicitly. Log opened 2026-09-18, so earlier
-project history lives in `CHANGELOG.md` and `git log`, not here.
+bottom; never rewrite an entry — falsify explicitly. The resume section (current state,
+next actions, gates) lives in [PROGRESS.md](PROGRESS.md) and is rewritten every session;
+this log is never rewritten. Log opened 2026-09-18, so earlier project history lives in
+`CHANGELOG.md` and `git log`, not here.
 
 ---
 
@@ -86,6 +88,45 @@ landed. `--rs-seq` stays off.
 
 Gates re-run and green: clean build, 13/13 ctest, server healthy on Ling-mini :8017,
 branch in sync with fork. Decision sweep produced `docs/adr/001` (hybrid reuse policy)
-and `docs/adr/002` (reasoning echo), indexed in `docs/README.md`. Resume doc
-(`SESSION_SUMMARY.md`) written with next actions: stacked PR (fork-internal base),
+and `docs/adr/002` (reasoning echo), indexed in `docs/README.md`.
+
+Resume doc (`SESSION_SUMMARY.md`) written with next actions: stacked PR (fork-internal base),
 bridge auto-echo prototype, aider benchmark on LFM2.5.
+
+*2026-09-18 note: renamed per the updated lifecycle skill — this file was RE_PROGRESS.md,
+the resume doc became [PROGRESS.md](PROGRESS.md) (formerly SESSION_SUMMARY.md).*
+
+## 2026-09-18 — Feature-flag audit, bench-features.sh, lifecycle migration
+
+User question: "are all of our new features behind command line flags?" — answered by
+audit: no, and deliberately. Warmup is a bridge default (`--no-warmup`), echo/think are
+per-request fields; `--rs-seq` is the only new CLI flag (off by default, ADR-001).
+
+**Shipped `scripts/bench-features.sh`** — before/after proof of all three residency
+features over the bridge, isolated port (default 8019), 3-turn chain with VERIFIED
+answers (42/52/62; fast-but-wrong = FAIL). Debugging it exercised real failure modes:
+(1) a static "template mentions think" probe over-triggered on Ling-mini — replaced with
+a behavioral probe on `reasoning_content`; (2) forgetting `--chatml` in the bridge args
+reproduced the known empty-prompt 502 from earlier sessions — engine args now default to
+`--chatml` (overridable via `EXTRA_ENGINE_ARGS`); (3) `gguf-py`'s `get_string` silently
+fails on this version — the fields API is the working one; (4) chain construction must
+be incremental (each turn needs the prior reply file); (5) answer verification must
+match the exact content field (`"content": "52"`), not a substring (52 ⊂ 525); (6) the
+script backs up/restores the global `warmup.json` so bench runs never contaminate the
+user's warm cache.
+
+Measured (Ling-mini-2.0, this host): warmup off→on cuts T1 prefill 2.19 s → 0.06 s
+(~35×), tok/s 9.4 → 16.1; echo skipped behaviorally; `--rs-seq` a verified no-op on pure
+transformers. Table in `docs/serve.md`; CHANGELOG updated.
+
+**Lifecycle migration** (user choice): single-`PROGRESS.md` convention (resume section
+rewritten per session on top, append-only history below) replaces the two-file scheme.
+`SESSION_SUMMARY.md` → `PROGRESS.md`, `RE_PROGRESS.md` → `PROGRESS.history.md` (git mv,
+history preserved). The project-lifecycle skill was updated in both home copies —
+discovery: `~/.agents/skills/` was STALE (missing the SOFTWARE_REQUIREMENTS module);
+`~/skills/skills/` was newer and is now the synced source of truth.
+
+**Stacked-PR plan recorded and HELD** (user decision: wait for serve-bridge PR #197 to
+merge): after merge, sync fork main → rebase `feat/session-residency` onto it (the
+serve-bridge commits collapse into main) → `gh pr create --repo Helldez/BigMoeOnEdge
+--base main`. Fallback documented in PROGRESS.md Open questions if #197 stalls.

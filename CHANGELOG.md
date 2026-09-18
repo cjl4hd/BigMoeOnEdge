@@ -52,6 +52,13 @@ Semantic Versioning.
   upstream's rollback allowlist but crashes during graph reserve with snapshots enabled —
   a fixed node-pool overflow, invariant to context/ubatch/budget — recorded as the third
   upstream gate for hybrid residency.
+- **`scripts/bench-features.sh`: one-command before/after proof of the residency features.**
+  Serves the model through the bridge on an isolated port (default 8019; a server on another
+  port is untouched), runs a 3-turn chain with verified answers (a faster run with wrong answers
+  reports FAIL, never a win), and prints per-feature markdown rows: warmup off/on, reasoning
+  echo off/on (skipped behaviorally when the model emits no `reasoning_content`), and `--rs-seq`
+  off/on. Measured on Ling-mini-2.0, warmup cut the first turn's prefill ~35× (2.19 s → 0.06 s);
+  see [serve.md](docs/serve.md) for the table.
 - **Warmup: frontload the conversation prefix at server start** (`bmoe-serve.py`). After each
   request the bridge persists the stable prefix (everything but the in-flight user turn) to
   `~/.cache/bmoe-serve/warmup.json` (0600); at startup it replays that prefix through the
