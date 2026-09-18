@@ -56,9 +56,14 @@ Semantic Versioning.
   ([ADR-003](docs/adr/003-bridge-auto-echo.md)). The bridge records each reply's exact
   `(reasoning, answer)` span and rewrites matching assistant history turns to
   `<think>reasoning</think>answer` before the engine sees them, so thinking hybrids get
-  delta-only prefill without any client cooperation. Exact-match only: edited or
-  regenerated answers, turns already containing `<think>`, and unknown replies are never
-  rewritten — they fall back to the safe full re-prefill. Off by default.
+  delta-only prefill without any client cooperation. Against aider it also canonicalizes
+  the message array — aider's edit-format boilerplate rides only the newest user turn, so
+  the bridge strips it from user turns and relocates it into the system prompt once.
+  Measured with aider on LFM2.5: edit turns still full-clear (aider re-adds the edited
+  file with fresh content; a hybrid cannot rewind), but pure-question follow-ups prefill
+  ~26 tokens reusing ~1700 in ~1.6 s instead of ~40 s of full prefill. Exact-match only:
+  edited or regenerated answers, turns already containing `<think>`, and unknown replies
+  are never rewritten — they fall back to the safe full re-prefill. Off by default.
 - **`scripts/bench-features.sh`: one-command before/after proof of the residency features.**
   Serves the model through the bridge on an isolated port (default 8019; a server on another
   port is untouched), runs a 3-turn chain with verified answers (a faster run with wrong answers

@@ -49,7 +49,14 @@ What the bridge does with client fields:
 - With `--auto-echo` the bridge does that re-embedding itself ([ADR-003](adr/003-bridge-auto-echo.md)):
   assistant history turns matching a reply the bridge generated are rewritten to the exact
   generated span, so unmodified OpenAI clients get the same append reuse. Exact-match only —
-  edited or regenerated answers fall back to the safe full re-prefill.
+  edited or regenerated answers fall back to the safe full re-prefill. Against aider the
+  pipeline also canonicalizes the message array (aider appends its edit-format boilerplate to
+  the newest user turn only, so prior turns shrink between requests): the boilerplate is
+  stripped from user turns and relocated into the system prompt once, making the canonical
+  history request-independent. Measured with aider on LFM2.5: edit turns still full-clear
+  (aider re-adds the edited file with new content — semantically required, and a hybrid
+  cannot rewind), but pure-question follow-ups prefill ~26 tokens reusing ~1700 in ~1.6 s
+  instead of ~40 s of full prefill.
 - Non-streaming responses carry a `bmoe` object with the `BMOE_DONE` perf block (tok/s, cache
   hit, stall) — the same numbers the CSV sink records. The SSE stream emits only OpenAI-shaped
   chunks: strict client SDKs validate every event, so no vendor-specific events ride the stream.

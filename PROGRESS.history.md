@@ -160,3 +160,27 @@ Process notes for future sessions: never `pkill -f` a pattern that matches the i
 shell's own command line (killed our own launches twice); after killing a bridge, WAIT
 for the port to actually free (ss -tln) before rebinding — the bind races the dying
 process's TIME_WAIT and the new bridge dies after loading the engine.
+
+## 2026-09-18 (night) — aider debugging: two client behaviors found, one fixed bridge-side
+
+The aider live test showed n_reused=0 on every turn despite --auto-echo. BMOE_DEBUG_ECHO
+payload capture (/tmp/bmoe-reqs.jsonl, dump of pre-canonical + canonical arrays) exposed
+TWO aider behaviors, not one:
+
+1. **Shrinking newest turn** (FIXED bridge-side): aider appends its edit-format
+   boilerplate ("To suggest changes to a file you MUST return…") to the NEWEST user turn
+   only, so the same turn's payload shrinks in the next request. First fix attempt
+   (strip boilerplate from all-but-newest) was WRONG — the same turn renders differently
+   across requests. Correct fix: strip from ALL user turns and relocate the boilerplate
+   into the system prompt once (request-independent canonical form). Verified: canonical
+   msgs byte-identical across captured requests, no duplicate scaffold on later requests.
+2. **Edit-turn file re-add** (inherent, not fixable): after an accepted edit, aider
+   re-adds the file with NEW content at a NEW position ("I updated the files." + re-add
+   block). Semantically required (model must see the updated file) and structurally
+   unavoidable for a hybrid (cannot rewind over the changed span). Measured directly by
+   replaying captured payloads: edit turn prefilled 955 / reused 0 (42.6 s); a
+   pure-question follow-up prefilled 26 / reused 1683 (1.6 s).
+
+Practical guidance: with aider + LFM2.5 + --auto-echo, batch edits; non-edit follow-up
+questions are now ~25x cheaper prefill. ADR-003 addendum, docs/serve.md, CHANGELOG
+updated. The debug capture stays behind BMOE_DEBUG_ECHO (off by default).

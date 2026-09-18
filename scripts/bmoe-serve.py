@@ -354,7 +354,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(400, {"error": {"message": "messages must not be empty"}})
             return
         if auto_echo:
-            messages = [auto_echo_turn(m) for m in messages]
+            rewritten = [auto_echo_turn(m) for m in messages]
+            messages = canonicalize_history(rewritten)
+            if os.environ.get("BMOE_DEBUG_ECHO"):
+                with open("/tmp/bmoe-reqs.jsonl", "a") as df:
+                    df.write(json.dumps({"t": time.time(), "rewritten": rewritten,
+                                         "canonical": messages,
+                                         "records": [r[1] for r in RECORDS]}) + "\n")
 
         # Generous default: thinking models spend completion tokens on reasoning before the
         # answer, and agent clients that never send max_tokens would otherwise get truncated.
@@ -525,6 +531,37 @@ class Handler(BaseHTTPRequestHandler):
 # seen (edited, regenerated) does not match and falls back to the safe full re-prefill.
 RECORDS = []
 MAX_RECORDS = 16
+
+# Aider appends its edit-format boilerplate to the NEWEST user turn only, so the same
+# turn's payload SHRINKS in the next request ("request\n\n<boilerplate>" -> "request") —
+# a mid-payload divergence that forces a hybrid full-clear every turn. The canonical
+# form must be REQUEST-INDEPENDENT: strip the boilerplate from ALL user turns and
+# relocate it into the system prompt once (same instructions, stable position). The
+# trailing "Reply in English." line rides along inside the stripped block.
+SCAFFOLD_MARKERS = (
+    "To suggest changes to a file you MUST return",
+)
+
+def canonicalize_history(messages):
+    # Harvest the newest boilerplate block, then strip it from every user turn.
+    scaffold = None
+    msgs = []
+    for m in messages:
+        c = m.get("content")
+        if m.get("role") == "user" and isinstance(c, str):
+            cuts = [c.find(mk) for mk in SCAFFOLD_MARKERS if c.find(mk) != -1]
+            if cuts and min(cuts) > 0:
+                scaffold = c[min(cuts):]
+                m = {**m, "content": c[:min(cuts)].rstrip()}
+        msgs.append(m)
+    # Relocate the scaffold into the system prompt if it is not already there.
+    if scaffold:
+        for i, m in enumerate(msgs):
+            if m.get("role") == "system" and isinstance(m.get("content"), str):
+                if not any(mk in m["content"] for mk in SCAFFOLD_MARKERS):
+                    msgs[i] = {**m, "content": m["content"].rstrip() + "\n\n" + scaffold.strip()}
+                break
+    return msgs
 
 def find_recorded_reply(answer):
     a = (answer or "").strip()

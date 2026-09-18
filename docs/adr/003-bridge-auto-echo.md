@@ -1,6 +1,13 @@
 # ADR-003: Bridge-side reasoning auto-echo
 
-**Status:** Accepted (2026-09-18)
+**Status:** Accepted (2026-09-18). *2026-09-18 addendum (aider): with aider the message
+array needs a request-independent canonical form before any of this can fire — aider
+appends its edit-format boilerplate to the newest user turn only (the same turn shrinks
+in the next request) and re-adds edited files with fresh content at a new position. The
+bridge therefore strips the boilerplate from all user turns and relocates it into the
+system prompt once. Measured: edit turns still full-clear (file content changed — a
+hybrid cannot rewind, and the model must see the new file), but pure-question follow-ups
+reuse 1683 tokens and prefill 26 in ~1.6 s instead of re-prefilling ~950.*
 
 ## Context
 
