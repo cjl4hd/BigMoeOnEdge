@@ -6,95 +6,72 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-19 (session 5). Phase: host bench campaign (session 4
-continues) — Ornith row shipped; c4/c5 divergence cells added to cellc.sh mid-flight.*
-*One-line status: the three OOM kills today were all c5's `--rs-seq 160` (10.1 GiB
-snapshot cache on the 11 GiB host) — budget reverted to 64 with the OOM law recorded
-in cellc.sh. c4 (rs-seq OFF) full-clear baseline ok (T2: 56 prompt / 0 reused). **c5
-(rs-seq 64) completed after resume, user-approved: verdict ok, T2 rewound — 33 prompt /
-23 reused, 62 correct, no degeneration — first live hybrid rewind through the real
-engine; wall-clock prefill unchanged (IO-bound host), so the win is mechanism-proving,
-not latency.** Uncommitted: session.cpp pos0 port (working-tree-only per protocol).
-Next: Cyber-Tiel-Coder-35B batch per Next actions 8.*
+*Resume last rewritten: 2026-09-19 (session 5 wrap-up). Phase: host bench campaign —
+Ornith measured through the divergence cells; publish flow scripted and first run.*
+*One-line status: c4/c5 divergence cells on Ornith (c4 rs-seq-off full-clear baseline
+T2 56 prompt / 0 reused; c5 rs-seq 64 T2 REWOUND — 33 prompt / 23 reused, 62 correct,
+no degeneration: first live hybrid rollback through the real engine) are PUBLISHED on
+`cjl4hd:main` `5988e17` via the new `scripts/publish-host-bench.sh` (reusable: worktree,
+drift guard, rule-7 scan, push). The day's three OOM kills were c5's `--rs-seq 160`
+(OOM law in cellc.sh). Next: Cyber-Tiel-Coder-35B batch, then the queue (Next action 2).*## State delta (this session)
 
-## State delta (this session)
-
-- **The mechanism, end to end (kernel-traced, then measured):** a ubatch of n tokens
-  writes snapshot planes 0..min(n,K)−1, plane p = state p tokens before the ubatch's end
-  (GDN kernel `ops.cpp`: `target_slot = n_tokens−1−t`; `lfm2.cpp` conv: `n_written =
-  min(n,K)`); single-token steps rewrite only plane 0; `seq_rm` reads plane d. Vanilla is
-  therefore exact iff the wanted state still occupies plane d — m=0 rollbacks cutting into
-  the last multi-token ubatch only. Every other shape restores a stale or never-written
-  state. The "lfm2moe m=0 d=8 anomaly" is resolved: the sweep's rm ubatch had exactly d
-  tokens, so plane d was never written by it — an arch-independent read of garbage, not an
-  LFM quirk.
-- **The backend is ubatch-shape dependent (~O(1) logits).** With NO rollback anywhere,
-  splitting a 10-token prefill 6+4 moves logits by up to 3.6 (MoE routing flips amplify
-  accumulation-order noise). This invalidates every bitwise rollback-vs-reference
-  comparison whose two sides saw different ubatch shapes — including upstream's own
-  multi-seq fixture, which FAILS on vanilla master (max diff 11.6) because it compares a
-  12-token-ubatch history against a 10-token-ubatch history at eps=1e-7. The fixture now
-  probes shape noise in-test and downgrades its bitwise assertions to reported-not-
-  asserted on shape-dependent backends. All earlier `statecmp`/`dsteps` "restore is not
-  bitwise" results carry the same confound; only the d=0 identical-shape control was
-  meaningful (it passed).
-- **The fix (branch `fix/rs-rollback-index-shift` in `~/git/llama.cpp`, committed):**
-  per-seq epoch bookkeeping (`rs_epoch_end` / `rs_epoch_planes` / `rs_epoch_lo`) set per
-  multi-token ubatch in `find_slot`; `seq_rm` restores plane `d−m` when the wanted state
-  survives the timeline and refuses otherwise (destroyed planes, checkpoint-loaded state —
-  a state blob carries a single plane — cleared/invalidated seqs, pending rollback);
-  `delta-net-base.cpp` now writes min(n,K) conv slots like lfm2.cpp (was: clamped all K,
-  desyncing conv from GDN planes after single-token steps); `prepare` dry-run, `rm_all`,
-  tail invalidation, fresh starts, `seq_cp` (inherit) / `seq_add` (affine follow) /
-  `seq_div` (invalidate) all handled. Code-reviewer findings fixed: discarded-timeline
-  planes after rollback+single-replay (the `rs_epoch_lo` floor), stale epochs surviving
-  sequence teardown, OOB in the tool's diff printing.
-- **Verification (new `cutsweep`: c tokens cut into the prefill × m singles, per-cell
-  shape-control row):** fix build EXACT 9/9 cells on lfm2moe AND qwen35; vanilla 3/9 EXACT
-  + 4 DIFFER + 2 REFUSED (c+m > n_rs_seq). Fixture test passes honestly on both cache
-  fills (single-seq bitwise incl. the checkpoint round-trips; multi-seq shape-gated),
-  after being reshaped to the sound decode-then-rollback shape and to assert the new
-  refusal semantics.
+- **OOM diagnosed (three kernel kills today: 10:57, 12:32, 12:48):** all `bmoe-cli`, all
+  the c5 bench cell at `--rs-seq 160` — 160 snapshot planes × ~60.4 MiB ≈ 10.1 GiB of
+  recurrent-state cache on an 11 GiB host; load completes, decode thrashes swap, the
+  OOM-killer fires. Engine code is clean: every `seq_rm` failure path falls back to a
+  full clear (verified). Budget reverted to 64; the OOM law lives in cellc.sh's header.
+- **c4 (rs-seq off) completed pre-kill:** divergence-turn full-clear baseline — T2
+  n_prompt 56 / n_reused 0, verdict ok (42/62 verified). Evidence: `/tmp/bench-ornith/c4/`.
+- **c5 (rs-seq 64) rerun after resume (user-approved):** T2 REWOUND — n_prompt 33 /
+  n_reused 23, answer 62 correct, no degeneration; ~3.9 GiB snapshot cache, no OOM.
+  First live end-to-end proof of the upstream index-shift fix through the real engine
+  on a 35B hybrid. Wall-clock honest: prefill_s 15.45 ≈ c4's 14.50 (IO-bound host) —
+  mechanism-proving, not a latency win.
+- **Publish flow scripted + first run:** `scripts/publish-host-bench.sh` (throwaway
+  worktree of fork/main → apply patch → rule-7 identifying-data scan → drift guard vs
+  origin/main → one commit → push HEAD:main). Ornith c4/c5 rows published as
+  `cjl4hd:main` `5988e17` from `scripts/host-bench-ornith-c4c5.patch`; landed tree
+  verified (`git diff origin/main fork/main --stat` shows only intended docs). The doc
+  also corrects the Ornith `--rs-seq` bullet: echo-style reuse stays structurally
+  blocked on qwen35 templates, but the c5 rewind proves the rollback path engages.
+- **Engine fix PRs unchanged:** #29085 (reserve) OPEN awaiting review; #29117 (index
+  shift) CLOSED under ggml-org's one-open-PR rule — reopen after #29085 merges.
 
 ## Artifacts touched (this session)
 
 | File | What |
 |---|---|
-| `tools/rsbench.cpp` | new `cutsweep` mode (cut-into-prefill cells + per-cell shape-control rows, `kCutRsSeq=8`); top-of-file law comment updated to the resolved mechanism; OOB guard on diff printing; INFRA diagnostics |
-| `docs/adr/004` | Addendum 3 (mechanism, shape-noise confound, the fix, cutsweep evidence); Addendum 2 marked superseded-in-part |
-| `CHANGELOG.md` | 0.24.3: cutsweep + d=8 anomaly resolution + upstream fix branch |
-| this file | resume rewrite + history entry (session 3) |
-| `~/git/llama.cpp` branch `fix/rs-rollback-index-shift` | `src/llama-memory-recurrent.{h,cpp}` (epoch bookkeeping + index-shift `seq_rm`), `src/models/delta-net-base.cpp` (conv min(n,K)), `tests/test-recurrent-state-rollback.cpp` (reshape + shape-noise gate) — committed locally |
-| `/tmp/pr-index-shift-description-draft.md` | PR description starting point (template; user rewrites as human) |
-| `/tmp/bmoe-rsbench-clone` | clone-linked runner (regenerate: `g++ -O2 -std=c++17 -I ~/git/llama.cpp/include -I ~/git/llama.cpp/ggml/include tools/rsbench.cpp -o /tmp/bmoe-rsbench-clone ~/git/llama.cpp/build/bin/libllama.so ~/git/llama.cpp/build/bin/libggml.so ~/git/llama.cpp/build/bin/libggml-base.so -Wl,-rpath,$HOME/git/llama.cpp/build/bin`) |
+| `scripts/cellc.sh` | c4/c5 divergence scenarios (verify 42 then 62); OOM law header: rs-seq budget 64 — depth is bounded by one turn's generated length, never MAXTOK |
+| `scripts/publish-host-bench.sh` | NEW: reusable publisher to cjl4hd:main — worktree, apply-check, upstream-drift guard, rule-7 leak scan, single commit, push; per-model recipe in its header |
+| `scripts/host-bench-ornith-c4c5.patch` | the exact doc diff published as 5988e17 (record of what landed) |
+| `PROGRESS.md` | this rewrite + the session-5 history entry |
+| `cjl4hd:main` `5988e17` | published: Ornith c4/c5 divergence rows + reading bullets + corrected `--rs-seq` qualification |
 
-Evidence (ephemeral, regenerable): `/tmp/cutsweep-fix-lfm.txt`, `/tmp/cutsweep-fix-q35.txt`
-(fix build), `/tmp/cutsweep-vanilla-lfm.txt`, `/tmp/cutsweep-vanilla-q35.txt` (vanilla
-baseline; regenerate via `git stash push -- src/ tests/` in the clone, rebuild `llama`,
-run, `git stash pop`, rebuild). Vanilla-master fixture failure log: rerun
-`test-recurrent-state-rollback -m <lfm2 gguf>` on a stash-cleaned build. Earlier
-sweep/statecmp outputs from session 2 remain regenerable via the same commands.
+Evidence (ephemeral, regenerable by rerunning the cells): `/tmp/bench-ornith/server-c4.log`,
+`/tmp/bench-ornith/c4/`, `/tmp/bench-ornith/server-c5.log`, `/tmp/bench-ornith/c5/`;
+`/tmp/warmup-c5-leftover.json` (the warmup file a dying c5 clobbered, kept for the record).
 
-Branch `feat/session-residency` (stacked on `feat/serve-bridge-arm64`), pushed to
-`fork` through `02f9278`. Tags: `progress/2026-09-17-residency-warmup`,
-`progress/2026-09-17-snapshot-rollback`, `progress/2026-09-18-reasoning-echo`.
-Upstream: `fix/rs-rollback-index-shift` pushed to `cjl4hd/llama.cpp` (`7b2ec36d1`,
-branch kept). Was opened as ggml-org PR **#29117**, then **CLOSED** the same day —
-ggml-org allows only one open PR per contributor, and #29085 (reserve, queued first)
-keeps the slot. **Reopen/resubmit #29117 after #29085 merges** (`gh pr reopen 29117`
-usually works since the branch persists; otherwise re-create from the same branch).
-Its description is still the tool draft — humanize before reopening. #29085 remains in
-draft with its human-authored body untouched.
+Arc state: `feat/session-residency` at this wrap-up commit, pushed to `fork`; the
+`core/src/engine/session.cpp` pos0 port (upstream `4fea119de` API rename) stays
+working-tree-only — NEVER commit it (the pin still has `n_past` and would not build);
+stash it for pin builds and the ctest gate. Engine-side branches: `bench/host-rs` on
+cjl4hd/llama.cpp (what `build-bench/` links); `fix/rs-rollback-index-shift` upstream,
+PR #29117 closed until #29085 merges.
 
 ## Environment state
 
-- **Server**: LFM2.5-8B on :8017 with `--auto-echo` (`lfm2moe`, 8k ctx, `--chatml`).
-  Daily-driver alternative (Ling-mini): `setsid nohup python3 -u scripts/bmoe-serve.py -m ~/llm/models/Ling-mini-2.0-Q4_K_M.gguf --engine-args "--ctx-size 8192 --chatml" --port 8017 > /tmp/bmoe-serve.log 2>&1 &`
-  (add `--auto-echo` for thinking models; Ling-mini does not think).
+- **Server**: DOWN (the c5 OOMs took it; restart when a serve/agents session needs it).
+  LFM2.5 daily driver: `setsid nohup python3 -u scripts/bmoe-serve.py -m ~/llm/models/LFM2.5-8B-A1B-UD-Q4_K_M.gguf --engine-args "--ctx-size 8192 --chatml" --auto-echo --port 8017 > /tmp/bmoe-serve.log 2>&1 &`
+  (Ling-mini alternative in the history; `--auto-echo` only for thinking models; run it
+  inside tmux — background processes die between tool calls here).
 - **Models** (`~/llm/models/`): Ling-mini-2.0, LFM2.5-8B-A1B-UD-Q4_K_M (note: no plain
   `-Q4_K_M` file — sweeps use the UD file), Qwen3.5-9B, olmoe-1b-7b, Laguna-XS-2.1,
   Ornith-1.5, Qwen3-30B, Qwen3.6-35B, Cyber-Tiel-35B.
-- **Warmup cache** `~/.cache/bmoe-serve/warmup.json`: self-regenerating.
+- **Warmup cache** `~/.cache/bmoe-serve/warmup.json`: RESTORED from the cellc backup
+  after a dying c5 clobbered it; self-regenerating.
+- **Bench build**: `build-bench/` = the arc linked against the clone llama
+  (`bench/host-rs`); requires the session.cpp pos0 working-tree port. The pin build
+  (`build/`) must not see that port.
 - **Remotes**: `origin` = Helldez/BigMoeOnEdge (upstream; PR #197 from fork's
   `feat/serve-bridge-arm64`), `fork` = cjl4hd/BigMoeOnEdge (push target); `gh` authed
   as `cjl4hd`. Submodule: `Helldez/llama.cpp` @ `0e8c83e51` (one sanctioned expert-hook
@@ -119,14 +96,7 @@ draft with its human-authored body untouched.
    REVIEW_REQUIRED). When merged it reaches this dependency only via a submodule bump —
    re-run the byte-identity gates after the bump (ADR-001's bump rule), and re-run
    `bmoe-rsbench reserve` on the new pin (the backtrace site differs pin↔master).
-3. **Open the fix PR (next).** Branch `fix/rs-rollback-index-shift` in `~/git/llama.cpp`
-   is complete and verified locally; push it to `cjl4hd/llama.cpp` and open the PR against
-   ggml-org from it. Separate from #29085 (reserve). The description must be written as a
-   human per the ggml-org bot's rules — `/tmp/pr-index-shift-description-draft.md` is only
-   a starting point following the PR template. Flag explicitly: `seq_rm` now returns false
-   where it used to return true (destroyed states); callers ignoring the return value will
-   hit the position-check decode failure and fall back to re-prefill.
-4. **Shape-dependent-backend caveat for any future bitwise claim:** any exactness
+3. **Shape-dependent-backend caveat for any future bitwise claim:** any exactness
    comparison against a differently-shaped reference is meaningless here (~3 logits of
    noise from ubatch splits alone, MoE routing flips). Only identical-shape controls
    (d=0) or argmax-level verdicts with shape-control rows are admissible evidence.
@@ -135,58 +105,53 @@ draft with its human-authored body untouched.
 
 1. **When #29085 merges: reopen PR #29117** (`gh pr reopen 29117 --repo ggml-org/llama.cpp`,
    fall back to re-creating from branch `fix/rs-rollback-index-shift`), humanize its
-   description first (still the tool draft verbatim), then ready-for-review. Watch
-   #29085: `gh pr view 29085 --repo ggml-org/llama.cpp --web`.
-   **Overlap scan (2026-09-18, all 200 open ggml-org PRs): no blockers.** Nearest:
-   #28550 (same file as #29117, disjoint regions — no_alloc allocation only), #28927/
-   #28872 (llama-context.cpp, different functions than #29085's 2-line budget add),
-   #29084 (improves the fixture models #29085 registers if it lands first). One watch
-   item: #28976 (WebGPU fused gated_delta_net) is a second GDN kernel implementation —
-   it must keep the snapshot-slot contract (slot p = state p tokens before ubatch end)
-   or the plane law breaks on that backend.
-2. **Engine-side enablement decision** (after the PR is up): once an upstream release
-   carries the fix, `--rs-seq` + hybrid edit turns become viable — plan the `--rs-seq`
-   flip condition and the hybrid residency un-exclusion (CHANGELOG 0.24.2's exclusion
-   note) for a future session; requires a submodule bump + full gates per ADR-001.
-3. **Watch #29085 and #197** (`gh pr view 29085 --repo ggml-org/llama.cpp`); execute the
-   stacked-PR plan when #197 merges; do the bump + gates when #29085 merges.
-4. **Measure Ling-mini edit-turn reuse** with captured aider payloads — the free
-   transformer rewind (ADR-004 Consequences).
-5. **Opencode re-test** with `--auto-echo` on LFM2.5 — stable tool-schema prefix should
-   reuse even better than aider.
-6. **Daily driver**: Ling-mini on :8017 when the benchmarking session ends.
-7. **Every wrap-up: refresh the README feature tables** (`In-flight features` + `Forks`;
-   rule 6 lives on `fork/main` `b1f34f7` — see the session-3 addendum below; this branch
-   carries no AGENTS change). Add/remove rows when branches merge, new branch features
-   land, or fork divergence changes.
-8. **Ornith 1.5: DONE** (see the session-4 history entry below). Remaining batch - per model:
-   (a) pin-build `bmoe-cli` mmap baseline in a 575 s window; (b) `bench-report.sh`; (c1/c2/c3)
-   `scripts/cellc.sh` on `build-bench` (needs the session.cpp pos0 working-tree port - do
-   NOT commit it, it breaks the pin build). Order: Cyber-Tiel-Coder-35B (MTP file - also
-   the future host model for `--mtp` cells), LFM2.5-8B, Laguna-XS, Ling-mini, Qwen3-30B,
-   Qwen3.6-35B, olmoe. Dense models skipped per user (R1-Distill, Qwen3.5-9B). After each
-   model: append its row to `docs/host-benchmarks.md` on `cjl4hd:main` (tmp branch off   `fork/main`, `push fork HEAD:main`).
-
-9. **After the batch: refresh the evidence tables** - `docs/benchmarks.md`/`docs/serve.md`
-   gain host rows, and the README in-flight table's perf column gets second/third data points.
+   description first (`/tmp/pr-index-shift-description-draft.md` is the tool draft — a
+   starting point only), then ready-for-review. Flag in the PR: `seq_rm` now returns
+   false where it used to return true; callers that ignore it fall back to re-prefill.
+   Overlap scan (2026-09-18, all 200 open ggml-org PRs): no blockers; one watch item —
+   #28976 (WebGPU GDN kernel) must keep the snapshot-slot contract or the plane law
+   breaks on that backend.
+2. **Continue the bench batch** — per model: (a) pin-build `bmoe-cli` mmap baseline
+   (`scripts/bench-report.sh`, one 575 s window); (b) bmoe streaming; (c1–c3) cellc.sh on
+   `build-bench` (MAXTOK=160 for the 35Bs); (c4/c5) divergence cells — c5 budget stays
+   64 per the OOM law unless the model's per-plane cost says otherwise. Publish each
+   model's rows via `scripts/publish-host-bench.sh` (recipe in its header). Order:
+   **Cyber-Tiel-Coder-35B next** (MTP carrier, future `--mtp` host model), then LFM2.5-8B,
+   Laguna-XS, Ling-mini, Qwen3-30B, Qwen3.6-35B, olmoe. Dense models skipped per user.
+3. **After the batch: refresh the evidence tables** — `docs/benchmarks.md`/`docs/serve.md`
+   gain host rows; the README in-flight table's perf column gets second/third points.
+4. **Watch #29085 and #197** (`gh pr view 29085 --repo ggml-org/llama.cpp`); execute the
+   stacked-PR plan when #197 merges; submodule bump + full gates when #29085 merges;
+   plan the `--rs-seq` flip + hybrid-residency un-exclusion once a release carries the fix.
+5. **Measure Ling-mini edit-turn reuse** with captured aider payloads; **opencode
+   re-test** with `--auto-echo` on LFM2.5. Daily driver back on :8017 when benching ends.
+6. **Every wrap-up: refresh the README feature tables** on `fork/main` (In-flight
+   features + Forks; rule 6 lives there) — add/remove rows when branches merge or
+   fork divergence changes.
 
 ## Resume gates (all must assert positives)
 
-1. `cmake --build build -j4 2>&1 | grep -E 'error|warning'` → empty (clean build).
-2. `cd build && ctest --output-on-failure` → **13/13 passed**.
-3. `git status -sb` → `feat/session-residency` in sync with fork, clean tree;
-   `git log --oneline -1` = newest residency-arc commit.
-4. `curl -fsS -m 3 http://127.0.0.1:8017/v1/models` → the `bmoe-local` JSON.
-5. `bash -n scripts/bench-features.sh && python3 -m py_compile scripts/bmoe-serve.py` → silent.
-6. `test -x build/tools/bmoe-rsbench` → exists (needs `-DBMOE_BUILD_TOOLS=ON`).
-7. `./build/tools/bmoe-rsbench reserve <lfm2 gguf>` → exit 134 on the unfixed pin
-   (regression signal for the reserve repro; flips to 0 after the #29085 bump).
-8. `cd ~/git/llama.cpp && git branch --show-current && git status --short` →
-   `fix/rs-rollback-index-shift`, clean tree, in sync with origin (the fix is committed
-   and pushed); `gh pr view 29117 --repo ggml-org/llama.cpp --json state` → `CLOSED`
-   (expected while #29085 holds the one-PR slot; flip this gate when it reopens);
-   re-verify cutsweep with `/tmp/bmoe-rsbench-clone cutsweep <lfm2 gguf>` → 9/9 EXACT
-   (rebuild the runner and the clone `llama` target first if the branch moved).
+1. Pin build + tests (the session.cpp pos0 port breaks the pin build — stash first):
+   `git stash push -- core/src/engine/session.cpp` → `cmake --build build -j4 2>&1 |
+   grep -E 'error|warning' | grep -v 'ccache not found'` → empty (ccache is simply not
+   installed here; that advisory is environmental, not a build diagnostic) →
+   `cd build && ctest --output-on-failure` → **13/13 passed** → `git stash pop`.
+   Verify the port is back (`git diff --stat`).
+2. `git status -sb` → `feat/session-residency` pushed to fork (or exactly the current
+   wrap-up ahead of it); the ONLY dirty file is ` M core/src/engine/session.cpp` (the
+   pos0 port — expected, never commit). Anything else dirty: triage before working.
+3. `bash -n scripts/cellc.sh && bash -n scripts/publish-host-bench.sh && python3 -m
+   py_compile scripts/bmoe-serve.py` → silent.
+4. `git fetch fork -q && git merge-base --is-ancestor origin/main fork/main && echo synced`
+   → prints `synced` (fork/main not behind upstream — the publish flow depends on it).
+5. `test -x build/tools/bmoe-rsbench` → exists (`-DBMOE_BUILD_TOOLS=ON`); and
+   `./build/tools/bmoe-rsbench reserve <lfm2 gguf>` → exit 134 on the unfixed pin
+   (flips to 0 after the #29085 bump).
+6. `cd ~/git/llama.cpp && git branch --show-current` → `fix/rs-rollback-index-shift`,
+   clean tree, in sync with origin; re-verify cutsweep with `/tmp/bmoe-rsbench-clone
+   cutsweep <lfm2 gguf>` → 9/9 EXACT (rebuild runner + clone llama if the branch moved).
+7. Server gate (only when a serve/agents session needs it): restore per Environment
+   state, then `curl -fsS -m 3 http://127.0.0.1:8017/v1/models` → the `bmoe-local` JSON.
 
 If a gate fails: re-derive from artifacts (git log, docs/adr, history below) before
 continuing. Never weaken a gate to make it pass.
@@ -645,3 +610,14 @@ attempt had clobbered it with a 196-byte file; leftover copy kept at
 /tmp/warmup-c5-leftover.json); no stray listeners; cellc.sh + bmoe-serve.py syntax
 gates pass. The session-5 commit (cellc.sh c4/c5 + this record) is local-only — the
 push to `fork` is left for the user to call.
+
+**Publish + wrap-up (same session, user request):** the Ornith c4/c5 rows are published
+on `cjl4hd:main` `5988e17` — via the new `scripts/publish-host-bench.sh` (throwaway
+worktree of fork/main → apply → drift guard vs origin/main → rule-7 identifying-data
+scan → single commit → push HEAD:main), doc diff archived on the arc as
+`scripts/host-bench-ornith-c4c5.patch`; landed tree verified with
+`git diff origin/main fork/main --stat` (only intended docs). The published doc
+corrects the Ornith `--rs-seq` bullet: echo-style reuse stays structurally blocked on
+qwen35 templates, but the c5 rewind proves the snapshot-rollback path engages. The arc
+carries cellc.sh c4/c5 + the publisher + this record (`20841ec` + the wrap-up commit);
+the session.cpp pos0 port remains working-tree-only (stashed for pin builds + gates).
