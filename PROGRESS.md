@@ -77,10 +77,12 @@ run, `git stash pop`, rebuild). Vanilla-master fixture failure log: rerun
 sweep/statecmp outputs from session 2 remain regenerable via the same commands.
 
 Branch `feat/session-residency` (stacked on `feat/serve-bridge-arm64`), pushed to
-`fork`. Tags: `progress/2026-09-17-residency-warmup`,
+`fork` through `02f9278`. Tags: `progress/2026-09-17-residency-warmup`,
 `progress/2026-09-17-snapshot-rollback`, `progress/2026-09-18-reasoning-echo`.
-Upstream work area `~/git/llama.cpp` is now on branch `fix/rs-rollback-index-shift`
-(off origin/master 4fea119de), committed, NOT pushed.
+Upstream: `fix/rs-rollback-index-shift` pushed to `cjl4hd/llama.cpp` and opened as
+**ggml-org/llama.cpp#29117 (DRAFT)** — description is still the tool draft; the user
+rewrites it as a human before leaving draft. #29085 remains in draft with its existing
+human-authored body untouched.
 
 ## Environment state
 
@@ -129,10 +131,10 @@ Upstream work area `~/git/llama.cpp` is now on branch `fix/rs-rollback-index-shi
 
 ## Next actions (ordered)
 
-1. **Open the fix PR**: `git push origin fix/rs-rollback-index-shift` in `~/git/llama.cpp`,
-   then `gh pr create --repo ggml-org/llama.cpp` — description rewritten by the user as a
-   human from `/tmp/pr-index-shift-description-draft.md` (template-compliant starting
-   point). Note in it: refusals are a behavior change; #29085 is unrelated and separate.
+1. **Humanize PR #29117's description** (it is the tool draft verbatim) and reply to
+   reviewer/bot feedback: `gh pr view 29117 --repo ggml-org/llama.cpp --web`. Keep it a
+   draft until the description is your own words. Same for #29085 (in draft, body already
+   reads final — review once, then ready-for-review).
 2. **Engine-side enablement decision** (after the PR is up): once an upstream release
    carries the fix, `--rs-seq` + hybrid edit turns become viable — plan the `--rs-seq`
    flip condition and the hybrid residency un-exclusion (CHANGELOG 0.24.2's exclusion
@@ -157,9 +159,10 @@ Upstream work area `~/git/llama.cpp` is now on branch `fix/rs-rollback-index-shi
 7. `./build/tools/bmoe-rsbench reserve <lfm2 gguf>` → exit 134 on the unfixed pin
    (regression signal for the reserve repro; flips to 0 after the #29085 bump).
 8. `cd ~/git/llama.cpp && git branch --show-current && git status --short` →
-   `fix/rs-rollback-index-shift`, clean tree (the fix is committed); re-verify with
-   `/tmp/bmoe-rsbench-clone cutsweep <lfm2 gguf>` → 9/9 EXACT (rebuild the runner and the
-   clone `llama` target first if the branch moved).
+   `fix/rs-rollback-index-shift`, clean tree, in sync with origin (the fix is committed
+   and pushed); `gh pr view 29117 --repo ggml-org/llama.cpp --json isDraft` → `true`;
+   re-verify cutsweep with `/tmp/bmoe-rsbench-clone cutsweep <lfm2 gguf>` → 9/9 EXACT
+   (rebuild the runner and the clone `llama` target first if the branch moved).
 
 If a gate fails: re-derive from artifacts (git log, docs/adr, history below) before
 continuing. Never weaken a gate to make it pass.
@@ -531,5 +534,6 @@ sweep's top-of-file comment now document vanilla's behavior; `sweep` cells again
 build report REFUSED/INFRA, which is the honest verdict for those shapes.
 
 Evidence: `/tmp/cutsweep-{fix,vanilla}-{lfm,q35}.txt` (vanilla baseline via stash push/
-pop around a rebuild — regenerable; see Artifacts). Upstream branch committed locally,
-NOT pushed; PR description draft at `/tmp/pr-index-shift-description-draft.md`.
+pop around a rebuild — regenerable; see Artifacts). Upstream branch pushed to
+`cjl4hd/llama.cpp` and opened as ggml-org PR #29117 (draft); PR description draft at
+`/tmp/pr-index-shift-description-draft.md`.
