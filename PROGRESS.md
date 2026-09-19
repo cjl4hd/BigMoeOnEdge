@@ -6,70 +6,59 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-19 (session 6 wrap-up). Phase: host bench campaign —
-Cyber-Tiel-Coder-35B measured through the divergence cells; queue head now LFM2.5-8B.*
-*One-line status: full Cyber-Tiel-Coder-35B-A3B batch done and PUBLISHED on `cjl4hd:main`
-(`4418988` + correction `d19ead7`): (a) 1.29 tok/s / 616 majflt, (b) 2.19 tok/s / 72 majflt
-/ 81.9% hit, (c) auto-echo T2/T3 n_reused 222/265, (c4) full-clear 236/0, (c5) rewind
-33 prompt / 203 reused — T2 prefill 42.6 → 19.3 s, and warmup composes with rs-seq
-(T1 1 fresh / 203 restored). Two mechanism finds: the hybrid clear-block in session.cpp
-(n_rs_seq==0 → every non-append turn full-clears BEFORE the diff; explains the warmup-cell
-zeros), and warmup+rs-seq composition (c5 T1). cellc.sh readiness wait 150 → 420 s
-(35B streamed load is 178 s). Watched PRs checked today: #29085 OPEN/REVIEW_REQUIRED,
-#197 OPEN — everything held on them stays held. Next: LFM2.5-8B batch (Next action 1).*## State delta (this session)
+*Resume last rewritten: 2026-09-19 (session 7 wrap-up). Phase: host bench campaign —
+three models published (Ornith, Cyber-Tiel, LFM2.5); the doc now carries a
+summary/conclusions/recommendations section; queue head is Laguna-XS.*
+*One-line status: README perf column refreshed on `cjl4hd:main` (`3999832`) with the
+Cyber-Tiel points and a stale rs-seq claim fixed; host-benchmarks.md gained
+Summary/Conclusions/Recommendations; then the full LFM2.5-8B batch measured and
+published (`6d0bc1e` + ratio fix `f9b9f4f`) — the fits-RAM contrast case: (a) 9.69
+tok/s / 0 majflt, (b) 8.64 tok/s (streaming LOSES on a resident model, −12%), warmup
+T1 7.59 → 1.12 s (6.8×), auto-echo T2/T3 24/124 and 24/205 (LFM2.5's template echoes
+natively — no reconcile turn), c4 48/0, c5 rewind 26/22 with prefill 2.82 → 1.25 s and
+T1 1 fresh / 22 reused (warmup+rs-seq composition replicated on a second arch family).
+Self-caught ratio slip (7×→~5×) fixed same session. Queue: Laguna-XS next.*## State delta (this session)
 
-- **Full Cyber-Tiel-Coder-35B-A3B batch (qwen35moe, 21.0 GB, MTP carrier):** (a) mmap
-  baseline 1.29 tok/s, load 47 s, 616 majflt/tok (thrash); (b) streaming 2.19 tok/s
-  (+70%), load 178 s, 72 majflt/tok, hit 81.9%, prefill 68.3 s (SLOWER than (a)'s 61.8 —
-  prefill routes nearly all experts, nothing to skip); (c1–c3) verdicts ok, auto-echo
-  T2 28/222, T3 28/265, prefill 42 → 10–12 s; (c4) full-clear baseline T2 236/0; (c5)
-  T2 REWOUND 33 prompt / 203 reused, 62 correct, no degeneration — T2 prefill 42.6 →
-  19.3 s (the rewind pays WALL-CLOCK here, unlike IO-bound Ornith where it was
-  mechanism-only). Published `cjl4hd:main` `4418988`, corrected `d19ead7`.
-- **Publish error caught in post-publish audit:** the first patch carried cell (b)
-  prefill 28.1 s — pattern-slipped from Ornith's row; the CSV says 68.255 s. Fixed on
-  fork/main in the same session (`d19ead7`). Lesson: never transcribe a published
-  number from memory or a sibling row — re-read the summary line of the run's own CSV.
-- **Warmup-cell mechanism resolved (code-verified, session.cpp generate()):** the hybrid
-  clear-block runs BEFORE the residency diff: with `n_rs_seq==0` a hybrid may only
-  APPEND to the resident mirror — any non-append turn (warmup T1's short render, a
-  divergence) full-clears unconditionally. So c2's zeros are the designed worst case:
-  the replay ran (log: "4/4 messages resident in 59s") but a plain first turn cannot be
-  a strict extension of the reasoning-bearing resident render. What warmup buys without
-  snapshots is cold-start only (c2 T1 42.4 s vs c4's identical T1 47.6 s).
-- **Warmup + rs-seq COMPOSE (new, c5):** with snapshots on, the clear-block is skipped
-  and the diff path is legal — c5 T1 came back **1 prompt / 203 reused** (the replayed
-  history restored at depth 1 + 1 fresh token), 2.6 s where every other cell prefills
-  ~45 s. Warmup is not redundant with rs-seq; it seeds what the rewind restores.
-- **Consequence recorded:** a clobbered warmup.json costs nothing structurally — any
-  non-append turn cleared anyway before snapshots existed. Session 5's restore-after-
-  clobber practice was precautionary; keep the backup (cp -n) but a restore is moot.
-  The cache now holds the Cyber-Tiel chain and self-regenerates on the next serve.
-- **cellc.sh readiness wait 150 → 420 s:** Cyber-Tiel's streamed load alone is 178 s;
-  every c-cell on a 35B would have false-FAILed (SERVER-FAILED) on the short poll.
-- **Run-order note:** cell (b) ran FIRST by accident — `bench-report.sh` hardcodes the
-  streaming stack, so it IS cell (b); cell (a) is a direct `bmoe-cli` run with the same
-  protocol minus streaming flags. Both profiles clean (no OOM, normal RSS); published
-  under the correct cells.
-- **Watched PRs checked (today):** #29085 OPEN/REVIEW_REQUIRED; #197 OPEN. Stacked-PR
-  plan and #29117 reopen stay held.
+- **README in-flight table refreshed on fork/main (`3999832`):** append-reuse row gains
+  the Cyber-Tiel host point (28/222–265, prefill 42→10–12 s); the `--rs-seq` row's stale
+  "restore not bit-exact" claim replaced with the true state (exact 9/9 cutsweep + live
+  on 35B hybrids); warmup row qualified (reuse part needs `--rs-seq` on thinking
+  hybrids). host-benchmarks.md gained **Summary / Conclusions / Recommendations**
+  grounded in the published rows.
+- **LFM2.5-8B-A1B full batch (`6d0bc1e`, fix `f9b9f4f`) — the fits-RAM contrast case:**
+  (a) 9.69 tok/s, load 10.5 s, prefill 1.65 s, 0 majflt; (b) 8.64 tok/s, prefill 7.9 s
+  (streaming is a NET LOSS with no thrash to fix — headline conclusion, now in the
+  recommendations); (c) warmup T1 7.59 → 1.12 s (6.8×), reuse still 0 (prefix-cut);
+  auto-echo T2 24/124, T3 24/205, prefill ~1.2 s — LFM2.5's template echoes natively,
+  so there is NO reconcile turn (unlike qwen35 family); (c4) 48/0; (c5) rewind 26/22,
+  prefill 2.82 → 1.25 s, T1 1 fresh / 22 reused at 0.12 s — composition replicated on
+  lfm2moe, second arch family with a live rollback proof.
+- **Second self-caught ratio slip:** published "7× faster prefill" for fits-RAM mmap;
+  7.9/1.65 is ~5×. Fixed `f9b9f4f` in the same session. The audit rule now applies to
+  derived ratios too, not just transcribed absolute numbers.
+- **Watched PRs (this session):** #29085 OPEN/REVIEW_REQUIRED, #197 OPEN (checked at
+  session-6 start; nothing in either session's flow touched them). Stacked-PR plan and
+  #29117 reopen stay held.
+- **Session 6 detail (Cyber-Tiel batch, clear-block mechanism, composition find,
+  tooling):** in the session-6 history entry below — the resume carries only what is
+  still current.
 
 ## Artifacts touched (this session)
 
 | File | What |
 |---|---|
-| `scripts/cellc.sh` | readiness wait 150 → 420 s (Cyber-Tiel streamed load alone is 178 s; the short poll false-FAILs every c-cell on a 35B) |
-| `scripts/host-bench-cyber-c1c5.patch` | the exact doc diff published as 4418988 (record of what landed) |
-| `scripts/host-bench-cyber-fix1.patch` | the correction published as d19ead7 (cell b prefill 68.3 s measured; c3 phrasing) |
-| `PROGRESS.md` | this rewrite + the session-6 history entry |
-| `cjl4hd:main` `4418988` + `d19ead7` | published: Cyber-Tiel a/b/c/c4/c5 rows + reading bullets; queue line updated |
-| `.bench-report/Cyber-Tiel-a-baseline.{csv,log}` | cell (a) raw evidence (direct CLI run; bench-report's own CSV covers cell b) |
+| `scripts/host-bench-readme-perf-summary.patch` | the README perf points + summary/conclusions/recommendations diff published as 3999832 |
+| `scripts/host-bench-lfm25-c1c5.patch` | the LFM2.5 rows + summary fold-in diff published as 6d0bc1e |
+| `scripts/host-bench-lfm25-fix1.patch` | the ratio correction published as f9b9f4f (7× → ~5×) |
+| `PROGRESS.md` | this rewrite + the session-7 history entry |
+| `cjl4hd:main` `3999832` + `6d0bc1e` + `f9b9f4f` | published: README perf column; Summary/Conclusions/Recommendations; LFM2.5 section + queue line |
+| `.bench-report/LFM25-a-baseline.{csv,log}` | LFM2.5 cell (a) raw evidence (direct CLI run; bench-report's own CSV covers cell b) |
 
-Evidence (ephemeral, regenerable by rerunning the cells): `/tmp/bench-cyber/server-c{1..5}.log`,
-`/tmp/bench-cyber/c{1..5}/` (per-turn t*/r* JSON), `/tmp/bench-cyber/warmup.json.bak` (the
-stale 196-byte backup `cp -n` kept — superseded, kept for the record).
+Evidence (ephemeral, regenerable by rerunning the cells): `/tmp/bench-lfm25/server-c{1..5}.log`,
+`/tmp/bench-lfm25/c{1..5}/` (per-turn t*/r* JSON), plus session 6's `/tmp/bench-cyber/` tree.
 
-Arc state: `feat/session-residency` at this wrap-up commit, pushed to `fork`; the
+Arc state: `feat/session-residency` TWO commits ahead of `fork/feat/session-residency`
+(session-6 `14cdfe8` and session-7 wrap-ups — the user has not pushed yet); the
 `core/src/engine/session.cpp` pos0 port (upstream `4fea119de` API rename) stays
 working-tree-only — NEVER commit it (the pin still has `n_past` and would not build);
 stash it for pin builds and the ctest gate. Engine-side branches: `bench/host-rs` on
@@ -85,9 +74,8 @@ PR #29117 closed until #29085 merges.
 - **Models** (`~/llm/models/`): Ling-mini-2.0, LFM2.5-8B-A1B-UD-Q4_K_M (note: no plain
   `-Q4_K_M` file — sweeps use the UD file), Qwen3.5-9B, olmoe-1b-7b, Laguna-XS-2.1,
   Ornith-1.5, Qwen3-30B, Qwen3.6-35B, Cyber-Tiel-35B.
-- **Warmup cache** `~/.cache/bmoe-serve/warmup.json`: holds the Cyber-Tiel chain (valid,
-  self-regenerating — the next serve on any other model overwrites it). The pre-campaign
-  196-byte stale file survives only as `/tmp/bench-cyber/warmup.json.bak`.
+- **Warmup cache** `~/.cache/bmoe-serve/warmup.json`: holds the LFM2.5 chain (valid,
+  self-regenerating — the next serve on any other model overwrites it).
 - **Bench build**: `build-bench/` = the arc linked against the clone llama
   (`bench/host-rs`); requires the session.cpp pos0 working-tree port. The pin build
   (`build/`) must not see that port.
@@ -122,15 +110,16 @@ PR #29117 closed until #29085 merges.
 
 ## Next actions (ordered)
 
-1. **Continue the bench batch — LFM2.5-8B-A1B next**, then Laguna-XS, Ling-mini,
+1. **Continue the bench batch — Laguna-XS-2.1 next** (LFM2.5 done), then Ling-mini,
    Qwen3-30B, Qwen3.6-35B, olmoe. Per model: (a) direct pin-build CLI run — NOT
    `bench-report.sh`, which hardcodes the streaming stack and is cell (b) — same
    protocol minus the streaming flags; (b) `scripts/bench-report.sh`; (c1–c3)
-   `cellc.sh` (MAXTOK: 160 for the 35Bs, 192 for thinking LFM2.5 — reasoning eats
+   `cellc.sh` (MAXTOK: 160 for the 35Bs, 192 for thinking models — reasoning eats
    smaller budgets); (c4/c5) divergence cells — c5 budget stays 64 per the OOM law.
-   Publish each model's rows via `scripts/publish-host-bench.sh`; **re-read every
-   number from its run's own CSV summary line before it goes in a patch** (the 28.1 s
-   slip). Dense models skipped per user.
+   Publish each model's rows via `scripts/publish-host-bench.sh`, then fold the model
+   into the doc's Summary/Conclusions/Recommendations and the README perf column.
+   **Audit rule (twice-earned):** re-read every number AND every derived ratio from
+   the run's own CSV before it goes in a patch. Dense models skipped per user.
 2. **When #29085 merges: reopen PR #29117** (`gh pr reopen 29117 --repo ggml-org/llama.cpp`,
    fall back to re-creating from branch `fix/rs-rollback-index-shift`), humanize its
    description first (`/tmp/pr-index-shift-description-draft.md` is the tool draft — a
@@ -684,3 +673,40 @@ number from memory or a sibling row — re-read the summary line of the run's ow
 checked: #29085 OPEN/REVIEW_REQUIRED, #197 OPEN — held items stay held. Session commit
 left local for the user to push (session-5 convention); `fork/main` carries the
 published doc rows regardless.
+
+## 2026-09-19 (session 7) — README perf column; summary/conclusions/recommendations; LFM2.5-8B batch
+
+User request: refresh the README in-flight perf column with the Cyber-Tiel point; give
+host-benchmarks.md a summary, conclusions, and recommendations; then repeat for LFM2.5.
+
+**Doc work (`3999832`):** three README rows refreshed — append-reuse gained the
+Cyber-Tiel host point; the `--rs-seq` row's stale "restore not bit-exact" claim
+(falsified by the session-3 cutsweep and two live c5 proofs by then) replaced with the
+true state; the warmup row qualified with the composition finding.
+host-benchmarks.md gained a Summary / Conclusions / Recommendations section grounded
+strictly in published rows, plus a protocol-line fix (192-token budget for thinking
+models, ahead of the LFM2.5 cells that use it).
+
+**LFM2.5-8B-A1B batch (`6d0bc1e`, `f9b9f4f`) — the fits-RAM contrast case** (5.0 GB on
+11 GB RAM; lfm2moe): (a) 9.69 tok/s, load 10.5 s, prefill 1.65 s, 0 majflt/tok;
+(b) 8.64 tok/s, prefill 7.9 s — streaming is a NET LOSS with nothing to fix: 0 faults
+in both cells, so the (b) stack only pays overhead. This is the doc's third profile and
+it sharpened the recommendations: streaming is for at-or-past-RAM models, not a default.
+(c) warmup T1 7.59 → 1.12 s (6.8×) — on a resident model the replay is pure prefill
+speed, no fault storm; reuse still 0 (prefix-cut, same designed mechanism). (c) auto-echo
+T2 24 prompt / 124 reused, T3 24/205, prefill ~1.2 s — LFM2.5's template echoes reasoning
+natively so reuse engages from the FIRST follow-up (no qwen35-style reconcile turn).
+(c4) 48/0 full clear. (c5) rewind 26 prompt / 22 reused, prefill 2.82 → 1.25 s, answer
+62 verified; T1 1 fresh / 22 reused at 0.12 s — warmup+rs-seq composition replicated on
+a second arch family, and the rewind's wall-clock win confirmed on a model where the
+skipped tokens are few but cheap.
+
+**Second self-caught slip:** the fits-RAM recommendation first said "7× faster prefill";
+7.9/1.65 is ~5×. Caught in the post-publish audit, fixed `f9b9f4f` same session. The
+session-6 audit rule extended: derived ratios are audited against the CSVs too.
+
+**State:** gates re-run green (pin build + 13/13 ctest, stash/pop around); no stray
+listeners or engine processes; warmup cache holds the LFM2.5 chain; the arc is two
+commits ahead of `fork/feat/session-residency` (session-6 and -7 wrap-ups, push left to
+the user per convention); `fork/main` carries all doc commits (5988e17 → 4418988 →
+d19ead7 → 3999832 → 6d0bc1e → f9b9f4f). Queue head: Laguna-XS-2.1.
