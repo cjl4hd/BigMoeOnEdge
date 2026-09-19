@@ -160,22 +160,16 @@ draft with its human-authored body untouched.
    rule 6 lives on `fork/main` `b1f34f7` — see the session-3 addendum below; this branch
    carries no AGENTS change). Add/remove rows when branches merge, new branch features
    land, or fork divergence changes.
-8. **Ornith 1.5 joins the test bench** (user request 2026-09-19). File on disk:
-   `~/llm/models/Ornith-1.5-35B-Q4_K_M.gguf` (22 GB, ~2× host RAM; Abliterated variant
-   also present). Arch `qwen35moe` — supported, no registry work. Run, in order:
-   (a) stream gate: `scripts/bench-report.sh` one-command protocol → sanity + baseline;
-   (b) feature matrix: `scripts/bench-features.sh` (warmup / echo / auto-echo / `--rs-seq`)
-   — echo is expected to SKIP structurally on qwen35 templates (baked empty `<think>`),
-   which is itself a data point on a third model; rs-seq reuse-yes/restore-not-bitwise
-   expectation from Qwen3.5-9B; (c) lossy knobs only after lossless cells: `--n-expert-used` 6,
-   drop 75%. Results land per `docs/benchmark-method.md`.
-9. **Cyber-Tiel-Coder-35B-A3B-MTP-UD-Q4_K_M** (also on disk, `qwen35moe`): same matrix
-   as (8) — and it is the MTP-carrying file, so it doubles as the host model for
-   Guess-ahead (`--mtp`) measurements, which currently have device-only numbers
-   (docs/mtp.md).
-10. **After (8)+(9): refresh the evidence tables** — `docs/benchmarks.md`/`docs/serve.md`
-   gain host rows for the second/third qwen35moe models, and the README in-flight table's
-   perf column gets a second data point per residency feature.
+8. **Ornith 1.5: DONE** (see the session-4 history entry below). Remaining batch - per model:
+   (a) pin-build `bmoe-cli` mmap baseline in a 575 s window; (b) `bench-report.sh`; (c1/c2/c3)
+   `scripts/cellc.sh` on `build-bench` (needs the session.cpp pos0 working-tree port - do
+   NOT commit it, it breaks the pin build). Order: Cyber-Tiel-Coder-35B (MTP file - also
+   the future host model for `--mtp` cells), LFM2.5-8B, Laguna-XS, Ling-mini, Qwen3-30B,
+   Qwen3.6-35B, olmoe. Dense models skipped per user (R1-Distill, Qwen3.5-9B). After each
+   model: append its row to `docs/host-benchmarks.md` on `cjl4hd:main` (tmp branch off   `fork/main`, `push fork HEAD:main`).
+
+9. **After the batch: refresh the evidence tables** - `docs/benchmarks.md`/`docs/serve.md`
+   gain host rows, and the README in-flight table's perf column gets second/third data points.
 
 ## Resume gates (all must assert positives)
 
@@ -576,3 +570,41 @@ from the canonical repo's point of view. An intermediate commit carrying them
 (`cc8a999`) was force-pushed off this branch at the user's request. Rule 6 lives on
 `fork/main` for now; this branch picks it up at the next main→arc sync (or the eventual
 stacked PR does).
+
+## 2026-09-19 - Session 4: host feature-bench campaign; Ornith 1.5 done
+
+User: benchmark ALL on-disk models, three cells each - (a) mmap baseline, (b) bmoe streaming
+stack, (c) bmoe + llama-side features - results on `cjl4hd:main` linked from the in-flight
+table. Scope per user: distinct archs (dense R1-Distill/Qwen3.5-9B and quant variants
+skipped), Ornith first then approve.
+
+Harness facts (must not be re-derived): background processes die between tool calls here
+(`process_type=BACKGROUND` unimplemented; setsid/nohup dies too) - every cell lives inside
+ONE 575 s window; tmux sessions DO survive (the 8017 server now runs in tmux session
+`bmoe-serve`). `bench/host-rs` on `cjl4hd/llama.cpp` = upstream `4fea119de` + index-shift
+`7b2ec36d1` + reserve `8f3e6776b` (cherry-pick) + expert-ready hook `2a8d47ac9`
+(cherry-pick; ONE conflict - upstream's IQP fast path in `mul_mat_id` - resolved
+hook-first so both consumers gate on it); pushed. `build-bench/` = the arc built against
+the clone (submodule detached at `2a8d47ac9`, pin restored after). `session.cpp` carries
+a WORKING-TREE-ONLY port: upstream `4fea119de` renamed
+`common_speculative_draft_params.n_past` to `pos0` (MTP-off path unaffected; NOT
+committable - the pin still has `n_past` and would fail to build).
+
+`scripts/cellc.sh` committed (arc): one scenario per invocation; verified 42/52/62 chain
+over the bridge with word-boundary answer checks; scenarios c1 warmup-off (seeds the
+warmup file), c2 warmup-on (replays), c3 `--auto-echo` + `preserve_reasoning` + echoed
+chain; `MAXTOK` env (160 for the 35Bs). Warmup cache backed up on first call, restored
+when c3 exits.
+
+Ornith-1.5-35B-Q4_K_M (`qwen35moe`, 20.2 GB, 4-core host, 8.5 GiB avail RAM):
+(a) baseline **1.39 tok/s**, load 145 s, **470 majflt/tok** (thrash); (b) streaming stack
+**2.06 tok/s (+48%)**, load 86 s, cache hit 88.6%, 129 majflt/tok; (c) warmup T1 prefill
+40.7 s -> **8.6 s (4.7x)**; auto-echo T3 **n_reused 98 / n_prompt 28**, prefill -50%,
+tok/s **+69%**, answers verified. T2 stays a full clear: the FIRST echoed turn's render
+must reconcile with what was generated (same qwen35 template mechanism as Qwen3.5-9B),
+then later turns ride the cache. `--rs-seq` eligible (bench build) but off: Ornith's
+echo-style reuse is template-blocked. Evidence: `/tmp/bench-ornith/*.{csv,log}`.
+
+Results published: `docs/host-benchmarks.md` on `cjl4hd:main` (`8be5bc5`) with the README
+residency row pointing at it; tooling caveat documented (bridge/cellc live on the arc
+until #197 merges).
