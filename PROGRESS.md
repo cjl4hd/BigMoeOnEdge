@@ -79,10 +79,13 @@ sweep/statecmp outputs from session 2 remain regenerable via the same commands.
 Branch `feat/session-residency` (stacked on `feat/serve-bridge-arm64`), pushed to
 `fork` through `02f9278`. Tags: `progress/2026-09-17-residency-warmup`,
 `progress/2026-09-17-snapshot-rollback`, `progress/2026-09-18-reasoning-echo`.
-Upstream: `fix/rs-rollback-index-shift` pushed to `cjl4hd/llama.cpp` and opened as
-**ggml-org/llama.cpp#29117 (DRAFT)** — description is still the tool draft; the user
-rewrites it as a human before leaving draft. #29085 remains in draft with its existing
-human-authored body untouched.
+Upstream: `fix/rs-rollback-index-shift` pushed to `cjl4hd/llama.cpp` (`7b2ec36d1`,
+branch kept). Was opened as ggml-org PR **#29117**, then **CLOSED** the same day —
+ggml-org allows only one open PR per contributor, and #29085 (reserve, queued first)
+keeps the slot. **Reopen/resubmit #29117 after #29085 merges** (`gh pr reopen 29117`
+usually works since the branch persists; otherwise re-create from the same branch).
+Its description is still the tool draft — humanize before reopening. #29085 remains in
+draft with its human-authored body untouched.
 
 ## Environment state
 
@@ -131,10 +134,10 @@ human-authored body untouched.
 
 ## Next actions (ordered)
 
-1. **Humanize PR #29117's description** (it is the tool draft verbatim) and reply to
-   reviewer/bot feedback: `gh pr view 29117 --repo ggml-org/llama.cpp --web`. Keep it a
-   draft until the description is your own words. Same for #29085 (in draft, body already
-   reads final — review once, then ready-for-review).
+1. **When #29085 merges: reopen PR #29117** (`gh pr reopen 29117 --repo ggml-org/llama.cpp`,
+   fall back to re-creating from branch `fix/rs-rollback-index-shift`), humanize its
+   description first (still the tool draft verbatim), then ready-for-review. Watch
+   #29085: `gh pr view 29085 --repo ggml-org/llama.cpp --web`.
    **Overlap scan (2026-09-18, all 200 open ggml-org PRs): no blockers.** Nearest:
    #28550 (same file as #29117, disjoint regions — no_alloc allocation only), #28927/
    #28872 (llama-context.cpp, different functions than #29085's 2-line budget add),
@@ -167,7 +170,8 @@ human-authored body untouched.
    (regression signal for the reserve repro; flips to 0 after the #29085 bump).
 8. `cd ~/git/llama.cpp && git branch --show-current && git status --short` →
    `fix/rs-rollback-index-shift`, clean tree, in sync with origin (the fix is committed
-   and pushed); `gh pr view 29117 --repo ggml-org/llama.cpp --json isDraft` → `true`;
+   and pushed); `gh pr view 29117 --repo ggml-org/llama.cpp --json state` → `CLOSED`
+   (expected while #29085 holds the one-PR slot; flip this gate when it reopens);
    re-verify cutsweep with `/tmp/bmoe-rsbench-clone cutsweep <lfm2 gguf>` → 9/9 EXACT
    (rebuild the runner and the clone `llama` target first if the branch moved).
 
