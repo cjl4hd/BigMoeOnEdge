@@ -6,17 +6,16 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-18 (late night, session 3). Phase: hybrid residency — the
-snapshot-rollback mechanism is fully mapped and FIXED on `cjl4hd/llama.cpp`
-branch `fix/rs-rollback-index-shift` (index-shift restore + honest refusals + delta-net
-conv alignment); verification is argmax-level with per-cell shape controls because the
-backend is ubatch-shape dependent (~3 logits of noise) — which also resolved the d=8
-anomaly.*
-*One-line status: vanilla restores plane d of the last multi-token ubatch, exact only for
-m=0 rollbacks cutting into that ubatch (d < its token count); the fix reads plane d−m when
-the wanted state survives and refuses honestly otherwise (cut cells 9/9 EXACT on lfm2moe
-and qwen35 vs vanilla's 3/9). PR #29085 (reserve, separate) and stacked PR #197 still
-OPEN; the fix branch is committed locally, its PR not yet opened.*
+*Resume last rewritten: 2026-09-19 (session 5). Phase: host bench campaign (session 4
+continues) — Ornith row shipped; c4/c5 divergence cells added to cellc.sh mid-flight.*
+*One-line status: the three OOM kills today were all c5's `--rs-seq 160` (10.1 GiB
+snapshot cache on the 11 GiB host) — budget reverted to 64 with the OOM law recorded
+in cellc.sh. c4 (rs-seq OFF) full-clear baseline ok (T2: 56 prompt / 0 reused). **c5
+(rs-seq 64) completed after resume, user-approved: verdict ok, T2 rewound — 33 prompt /
+23 reused, 62 correct, no degeneration — first live hybrid rewind through the real
+engine; wall-clock prefill unchanged (IO-bound host), so the win is mechanism-proving,
+not latency.** Uncommitted: session.cpp pos0 port (working-tree-only per protocol).
+Next: Cyber-Tiel-Coder-35B batch per Next actions 8.*
 
 ## State delta (this session)
 
@@ -608,3 +607,41 @@ echo-style reuse is template-blocked. Evidence: `/tmp/bench-ornith/*.{csv,log}`.
 Results published: `docs/host-benchmarks.md` on `cjl4hd:main` (`8be5bc5`) with the README
 residency row pointing at it; tooling caveat documented (bridge/cellc live on the arc
 until #197 merges).
+
+## 2026-09-19 (session 5) — c4/c5 divergence cells; the c5 OOM (three kernel kills)
+
+Continued session 4's follow-ups: cellc.sh gained c4/c5 (divergence-turn cells: the
+second request resends T1 + the engine's own reply and asks a NEW question — a hybrid
+must rewind to just after A1, so rs-seq OFF full-clears (c4) and rs-seq ON is the
+bounded rewind (c5); verify 42 then 62). Uncommitted alongside it: the session.cpp
+pos0 port (working-tree-only, NOT committable — session 4's protocol note).
+
+**The OOM (why sessions kept dying):** the kernel OOM-killer killed bmoe-cli three
+times today (10:57, 12:32, 12:48; all ~10.4–10.5 GB RSS, all in bench-driven scopes).
+Root cause is arithmetic: c5 launched with `--rs-seq 160` (a mid-session edit meant to
+cover MAXTOK) → `llama_memory_recurrent: size = 10112.81 MiB ... S (f32): 9660.00 MiB`
+on Ornith (~60.4 MiB per snapshot plane × 160) on an 11 GiB host. Load completes, the
+first token work thrashes swap, OOM. Nothing in the engine is at fault: seq_rm
+failures fall back to full clear everywhere (verified), and c4/c5 content generation
+ran clean at normal RSS before each kill.
+
+**c4 result (rs-seq OFF, completed pre-kill):** verdict ok (42/62 verified); T1
+n_prompt 24 / n_reused 0; T2 divergence n_prompt 56 / n_reused 0 — the designed
+full-clear baseline. Evidence: `/tmp/bench-ornith/server-c4.log` + `c4/`.
+
+**c5 result (rs-seq 64, rerun after resume with user approval):** verdict ok (42/62
+verified). T1 n_prompt 24 / n_reused 0; T2 divergence n_prompt 33 / **n_reused 23** —
+the snapshot rewind fired (restored to just after T1, re-prefilled only the
+plain-rendered reply + question, ~10 fresh tokens) and the restored stream decoded 62
+correctly with no degeneration: the index-shift fix's first live end-to-end proof
+through the real engine on a 35B hybrid (cutsweep's 9/9, now live). Honest wall-clock
+read: prefill_s 15.45 ≈ c4's 14.50 despite 23 fewer prompt tokens — on this IO-bound
+streaming host cached-token compute is not the bottleneck, so c5's win is
+mechanism-proving, not latency. No OOM: snapshot cache ≈3.9 GiB at 64 planes, peak
+fit within the 9.3 GiB available. Evidence: `/tmp/bench-ornith/{server-c5.log,c5/}`.
+
+**Cleanup done:** the user's global warmup.json restored from the cellc backup (a c5
+attempt had clobbered it with a 196-byte file; leftover copy kept at
+/tmp/warmup-c5-leftover.json); no stray listeners; cellc.sh + bmoe-serve.py syntax
+gates pass. The session-5 commit (cellc.sh c4/c5 + this record) is local-only — the
+push to `fork` is left for the user to call.
