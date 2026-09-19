@@ -56,10 +56,12 @@ setsid nohup python3 -u "$BRIDGE" -m "$M" --port "$PORT" $BARGS \
     --engine "$ENG" --engine-args "$EARGS" \
     > "$OUT/server-$SC.log" 2>&1 &
 SRV=$!
-for _ in $(seq 1 150); do
+for _ in $(seq 1 420); do
     grep -aq "OpenAI-compatible" "$OUT/server-$SC.log" 2>/dev/null && break
     sleep 1
 done
+# 420 s, not 150: a 35B streamed load alone measured ~178 s on the 4-core host, plus the
+# warmup replay c2/c3 run before announcing. A short poll false-FAILs a healthy server.
 grep -aq "OpenAI-compatible" "$OUT/server-$SC.log" || { echo "SERVER-FAILED"; tail -5 "$OUT/server-$SC.log"; exit 1; }
 
 ask() { # $1=messages.json $2=reply.json $3=preserve(0|1)

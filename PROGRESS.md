@@ -6,50 +6,68 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-19 (session 5 wrap-up). Phase: host bench campaign —
-Ornith measured through the divergence cells; publish flow scripted and first run.*
-*One-line status: c4/c5 divergence cells on Ornith (c4 rs-seq-off full-clear baseline
-T2 56 prompt / 0 reused; c5 rs-seq 64 T2 REWOUND — 33 prompt / 23 reused, 62 correct,
-no degeneration: first live hybrid rollback through the real engine) are PUBLISHED on
-`cjl4hd:main` `5988e17` via the new `scripts/publish-host-bench.sh` (reusable: worktree,
-drift guard, rule-7 scan, push). The day's three OOM kills were c5's `--rs-seq 160`
-(OOM law in cellc.sh). Next: Cyber-Tiel-Coder-35B batch, then the queue (Next action 2).*## State delta (this session)
+*Resume last rewritten: 2026-09-19 (session 6 wrap-up). Phase: host bench campaign —
+Cyber-Tiel-Coder-35B measured through the divergence cells; queue head now LFM2.5-8B.*
+*One-line status: full Cyber-Tiel-Coder-35B-A3B batch done and PUBLISHED on `cjl4hd:main`
+(`4418988` + correction `d19ead7`): (a) 1.29 tok/s / 616 majflt, (b) 2.19 tok/s / 72 majflt
+/ 81.9% hit, (c) auto-echo T2/T3 n_reused 222/265, (c4) full-clear 236/0, (c5) rewind
+33 prompt / 203 reused — T2 prefill 42.6 → 19.3 s, and warmup composes with rs-seq
+(T1 1 fresh / 203 restored). Two mechanism finds: the hybrid clear-block in session.cpp
+(n_rs_seq==0 → every non-append turn full-clears BEFORE the diff; explains the warmup-cell
+zeros), and warmup+rs-seq composition (c5 T1). cellc.sh readiness wait 150 → 420 s
+(35B streamed load is 178 s). Watched PRs checked today: #29085 OPEN/REVIEW_REQUIRED,
+#197 OPEN — everything held on them stays held. Next: LFM2.5-8B batch (Next action 1).*## State delta (this session)
 
-- **OOM diagnosed (three kernel kills today: 10:57, 12:32, 12:48):** all `bmoe-cli`, all
-  the c5 bench cell at `--rs-seq 160` — 160 snapshot planes × ~60.4 MiB ≈ 10.1 GiB of
-  recurrent-state cache on an 11 GiB host; load completes, decode thrashes swap, the
-  OOM-killer fires. Engine code is clean: every `seq_rm` failure path falls back to a
-  full clear (verified). Budget reverted to 64; the OOM law lives in cellc.sh's header.
-- **c4 (rs-seq off) completed pre-kill:** divergence-turn full-clear baseline — T2
-  n_prompt 56 / n_reused 0, verdict ok (42/62 verified). Evidence: `/tmp/bench-ornith/c4/`.
-- **c5 (rs-seq 64) rerun after resume (user-approved):** T2 REWOUND — n_prompt 33 /
-  n_reused 23, answer 62 correct, no degeneration; ~3.9 GiB snapshot cache, no OOM.
-  First live end-to-end proof of the upstream index-shift fix through the real engine
-  on a 35B hybrid. Wall-clock honest: prefill_s 15.45 ≈ c4's 14.50 (IO-bound host) —
-  mechanism-proving, not a latency win.
-- **Publish flow scripted + first run:** `scripts/publish-host-bench.sh` (throwaway
-  worktree of fork/main → apply patch → rule-7 identifying-data scan → drift guard vs
-  origin/main → one commit → push HEAD:main). Ornith c4/c5 rows published as
-  `cjl4hd:main` `5988e17` from `scripts/host-bench-ornith-c4c5.patch`; landed tree
-  verified (`git diff origin/main fork/main --stat` shows only intended docs). The doc
-  also corrects the Ornith `--rs-seq` bullet: echo-style reuse stays structurally
-  blocked on qwen35 templates, but the c5 rewind proves the rollback path engages.
-- **Engine fix PRs unchanged:** #29085 (reserve) OPEN awaiting review; #29117 (index
-  shift) CLOSED under ggml-org's one-open-PR rule — reopen after #29085 merges.
+- **Full Cyber-Tiel-Coder-35B-A3B batch (qwen35moe, 21.0 GB, MTP carrier):** (a) mmap
+  baseline 1.29 tok/s, load 47 s, 616 majflt/tok (thrash); (b) streaming 2.19 tok/s
+  (+70%), load 178 s, 72 majflt/tok, hit 81.9%, prefill 68.3 s (SLOWER than (a)'s 61.8 —
+  prefill routes nearly all experts, nothing to skip); (c1–c3) verdicts ok, auto-echo
+  T2 28/222, T3 28/265, prefill 42 → 10–12 s; (c4) full-clear baseline T2 236/0; (c5)
+  T2 REWOUND 33 prompt / 203 reused, 62 correct, no degeneration — T2 prefill 42.6 →
+  19.3 s (the rewind pays WALL-CLOCK here, unlike IO-bound Ornith where it was
+  mechanism-only). Published `cjl4hd:main` `4418988`, corrected `d19ead7`.
+- **Publish error caught in post-publish audit:** the first patch carried cell (b)
+  prefill 28.1 s — pattern-slipped from Ornith's row; the CSV says 68.255 s. Fixed on
+  fork/main in the same session (`d19ead7`). Lesson: never transcribe a published
+  number from memory or a sibling row — re-read the summary line of the run's own CSV.
+- **Warmup-cell mechanism resolved (code-verified, session.cpp generate()):** the hybrid
+  clear-block runs BEFORE the residency diff: with `n_rs_seq==0` a hybrid may only
+  APPEND to the resident mirror — any non-append turn (warmup T1's short render, a
+  divergence) full-clears unconditionally. So c2's zeros are the designed worst case:
+  the replay ran (log: "4/4 messages resident in 59s") but a plain first turn cannot be
+  a strict extension of the reasoning-bearing resident render. What warmup buys without
+  snapshots is cold-start only (c2 T1 42.4 s vs c4's identical T1 47.6 s).
+- **Warmup + rs-seq COMPOSE (new, c5):** with snapshots on, the clear-block is skipped
+  and the diff path is legal — c5 T1 came back **1 prompt / 203 reused** (the replayed
+  history restored at depth 1 + 1 fresh token), 2.6 s where every other cell prefills
+  ~45 s. Warmup is not redundant with rs-seq; it seeds what the rewind restores.
+- **Consequence recorded:** a clobbered warmup.json costs nothing structurally — any
+  non-append turn cleared anyway before snapshots existed. Session 5's restore-after-
+  clobber practice was precautionary; keep the backup (cp -n) but a restore is moot.
+  The cache now holds the Cyber-Tiel chain and self-regenerates on the next serve.
+- **cellc.sh readiness wait 150 → 420 s:** Cyber-Tiel's streamed load alone is 178 s;
+  every c-cell on a 35B would have false-FAILed (SERVER-FAILED) on the short poll.
+- **Run-order note:** cell (b) ran FIRST by accident — `bench-report.sh` hardcodes the
+  streaming stack, so it IS cell (b); cell (a) is a direct `bmoe-cli` run with the same
+  protocol minus streaming flags. Both profiles clean (no OOM, normal RSS); published
+  under the correct cells.
+- **Watched PRs checked (today):** #29085 OPEN/REVIEW_REQUIRED; #197 OPEN. Stacked-PR
+  plan and #29117 reopen stay held.
 
 ## Artifacts touched (this session)
 
 | File | What |
 |---|---|
-| `scripts/cellc.sh` | c4/c5 divergence scenarios (verify 42 then 62); OOM law header: rs-seq budget 64 — depth is bounded by one turn's generated length, never MAXTOK |
-| `scripts/publish-host-bench.sh` | NEW: reusable publisher to cjl4hd:main — worktree, apply-check, upstream-drift guard, rule-7 leak scan, single commit, push; per-model recipe in its header |
-| `scripts/host-bench-ornith-c4c5.patch` | the exact doc diff published as 5988e17 (record of what landed) |
-| `PROGRESS.md` | this rewrite + the session-5 history entry |
-| `cjl4hd:main` `5988e17` | published: Ornith c4/c5 divergence rows + reading bullets + corrected `--rs-seq` qualification |
+| `scripts/cellc.sh` | readiness wait 150 → 420 s (Cyber-Tiel streamed load alone is 178 s; the short poll false-FAILs every c-cell on a 35B) |
+| `scripts/host-bench-cyber-c1c5.patch` | the exact doc diff published as 4418988 (record of what landed) |
+| `scripts/host-bench-cyber-fix1.patch` | the correction published as d19ead7 (cell b prefill 68.3 s measured; c3 phrasing) |
+| `PROGRESS.md` | this rewrite + the session-6 history entry |
+| `cjl4hd:main` `4418988` + `d19ead7` | published: Cyber-Tiel a/b/c/c4/c5 rows + reading bullets; queue line updated |
+| `.bench-report/Cyber-Tiel-a-baseline.{csv,log}` | cell (a) raw evidence (direct CLI run; bench-report's own CSV covers cell b) |
 
-Evidence (ephemeral, regenerable by rerunning the cells): `/tmp/bench-ornith/server-c4.log`,
-`/tmp/bench-ornith/c4/`, `/tmp/bench-ornith/server-c5.log`, `/tmp/bench-ornith/c5/`;
-`/tmp/warmup-c5-leftover.json` (the warmup file a dying c5 clobbered, kept for the record).
+Evidence (ephemeral, regenerable by rerunning the cells): `/tmp/bench-cyber/server-c{1..5}.log`,
+`/tmp/bench-cyber/c{1..5}/` (per-turn t*/r* JSON), `/tmp/bench-cyber/warmup.json.bak` (the
+stale 196-byte backup `cp -n` kept — superseded, kept for the record).
 
 Arc state: `feat/session-residency` at this wrap-up commit, pushed to `fork`; the
 `core/src/engine/session.cpp` pos0 port (upstream `4fea119de` API rename) stays
@@ -67,8 +85,9 @@ PR #29117 closed until #29085 merges.
 - **Models** (`~/llm/models/`): Ling-mini-2.0, LFM2.5-8B-A1B-UD-Q4_K_M (note: no plain
   `-Q4_K_M` file — sweeps use the UD file), Qwen3.5-9B, olmoe-1b-7b, Laguna-XS-2.1,
   Ornith-1.5, Qwen3-30B, Qwen3.6-35B, Cyber-Tiel-35B.
-- **Warmup cache** `~/.cache/bmoe-serve/warmup.json`: RESTORED from the cellc backup
-  after a dying c5 clobbered it; self-regenerating.
+- **Warmup cache** `~/.cache/bmoe-serve/warmup.json`: holds the Cyber-Tiel chain (valid,
+  self-regenerating — the next serve on any other model overwrites it). The pre-campaign
+  196-byte stale file survives only as `/tmp/bench-cyber/warmup.json.bak`.
 - **Bench build**: `build-bench/` = the arc linked against the clone llama
   (`bench/host-rs`); requires the session.cpp pos0 working-tree port. The pin build
   (`build/`) must not see that port.
@@ -103,7 +122,16 @@ PR #29117 closed until #29085 merges.
 
 ## Next actions (ordered)
 
-1. **When #29085 merges: reopen PR #29117** (`gh pr reopen 29117 --repo ggml-org/llama.cpp`,
+1. **Continue the bench batch — LFM2.5-8B-A1B next**, then Laguna-XS, Ling-mini,
+   Qwen3-30B, Qwen3.6-35B, olmoe. Per model: (a) direct pin-build CLI run — NOT
+   `bench-report.sh`, which hardcodes the streaming stack and is cell (b) — same
+   protocol minus the streaming flags; (b) `scripts/bench-report.sh`; (c1–c3)
+   `cellc.sh` (MAXTOK: 160 for the 35Bs, 192 for thinking LFM2.5 — reasoning eats
+   smaller budgets); (c4/c5) divergence cells — c5 budget stays 64 per the OOM law.
+   Publish each model's rows via `scripts/publish-host-bench.sh`; **re-read every
+   number from its run's own CSV summary line before it goes in a patch** (the 28.1 s
+   slip). Dense models skipped per user.
+2. **When #29085 merges: reopen PR #29117** (`gh pr reopen 29117 --repo ggml-org/llama.cpp`,
    fall back to re-creating from branch `fix/rs-rollback-index-shift`), humanize its
    description first (`/tmp/pr-index-shift-description-draft.md` is the tool draft — a
    starting point only), then ready-for-review. Flag in the PR: `seq_rm` now returns
@@ -111,13 +139,6 @@ PR #29117 closed until #29085 merges.
    Overlap scan (2026-09-18, all 200 open ggml-org PRs): no blockers; one watch item —
    #28976 (WebGPU GDN kernel) must keep the snapshot-slot contract or the plane law
    breaks on that backend.
-2. **Continue the bench batch** — per model: (a) pin-build `bmoe-cli` mmap baseline
-   (`scripts/bench-report.sh`, one 575 s window); (b) bmoe streaming; (c1–c3) cellc.sh on
-   `build-bench` (MAXTOK=160 for the 35Bs); (c4/c5) divergence cells — c5 budget stays
-   64 per the OOM law unless the model's per-plane cost says otherwise. Publish each
-   model's rows via `scripts/publish-host-bench.sh` (recipe in its header). Order:
-   **Cyber-Tiel-Coder-35B next** (MTP carrier, future `--mtp` host model), then LFM2.5-8B,
-   Laguna-XS, Ling-mini, Qwen3-30B, Qwen3.6-35B, olmoe. Dense models skipped per user.
 3. **After the batch: refresh the evidence tables** — `docs/benchmarks.md`/`docs/serve.md`
    gain host rows; the README in-flight table's perf column gets second/third points.
 4. **Watch #29085 and #197** (`gh pr view 29085 --repo ggml-org/llama.cpp`); execute the
@@ -621,3 +642,45 @@ corrects the Ornith `--rs-seq` bullet: echo-style reuse stays structurally block
 qwen35 templates, but the c5 rewind proves the snapshot-rollback path engages. The arc
 carries cellc.sh c4/c5 + the publisher + this record (`20841ec` + the wrap-up commit);
 the session.cpp pos0 port remains working-tree-only (stashed for pin builds + gates).
+
+## 2026-09-19 (session 6) — Cyber-Tiel-Coder-35B full batch; the warmup mechanism resolved
+
+Next action 2 of the session-5 resume executed for the queue head. Gate 1 re-run first
+(stash pos0 port → pin build clean → 13/13 ctest → pop). Cell (b) ran first by accident —
+`bench-report.sh` hardcodes `--moe-stream --cache-mb auto --io-threads 4 --overlap
+--dense-weights anon`, which IS cell (b); cell (a) is the same protocol as a direct
+pin-CLI run minus the streaming flags (recorded in the published protocol rows).
+
+**Results (all verdicts ok, answers verified):** (a) 1.29 tok/s, load 47 s, 616
+majflt/tok — thrash profile; (b) 2.19 tok/s (+70%), load 178 s, 72 majflt/tok, hit
+81.9%, prefill 68.3 s — SLOWER than (a)'s 61.8 s, honestly so: prefill routes nearly
+all experts so streaming has nothing to skip and pays the streamer's overhead; (c1–c3)
+auto-echo T2 28 prompt / 222 reused, T3 28/265, prefill 42 → 10–12 s; (c4) divergence
+full-clear T2 236/0; (c5) T2 REWOUND 33 prompt / 203 reused, 62 correct, no
+degeneration — T2 prefill 42.6 → 19.3 s. Unlike IO-bound Ornith (c5 = mechanism proof,
+no latency win), Cyber-Tiel's rewind pays WALL-CLOCK: 203 skipped tokens outweigh the
+restore. And c5's T1 came back **1 prompt / 203 reused** (2.6 s vs ~45 s everywhere
+else): warmup and rs-seq COMPOSE — the replay seeds what the rewind restores.
+
+**Mechanism find (code-verified in session.cpp generate()):** the hybrid clear-block
+runs BEFORE the residency diff — with `n_rs_seq==0` a hybrid may only APPEND to the
+resident mirror; any non-append turn (warmup T1's short render, a divergence)
+full-clears unconditionally, cells cannot be rewound without snapshots. This resolves
+the c2 anomaly (replay completed — log "4/4 messages resident in 59s" — yet T1
+n_reused 0): the warmup cells' zeros are the designed worst case, and what warmup buys
+without snapshots is cold-start only (c2 T1 42.4 s vs c4's identical T1 47.6 s). With
+snapshots the clear-block is skipped and the diff path is legal — hence c5. Corollary
+recorded: a clobbered warmup.json costs nothing structurally (pre-snapshot, any
+non-append turn cleared anyway); session 5's restore-after-clobber was precautionary.
+
+**Publish:** `cjl4hd:main` `4418988` (rows + reading bullets + queue line), then a
+correction `d19ead7` — the first patch carried cell (b) prefill 28.1 s, a pattern slip
+from Ornith's sibling row; the run's own CSV says 68.255 s. Caught in the post-publish
+audit against evidence. Rule going into Next action 1: never transcribe a published
+number from memory or a sibling row — re-read the summary line of the run's own CSV.
+
+**Tooling:** cellc.sh readiness wait 150 → 420 s (Cyber-Tiel's streamed load alone is
+178 s; every c-cell on a 35B would have false-FAILed with SERVER-FAILED). Watched PRs
+checked: #29085 OPEN/REVIEW_REQUIRED, #197 OPEN — held items stay held. Session commit
+left local for the user to push (session-5 convention); `fork/main` carries the
+published doc rows regardless.
