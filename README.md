@@ -72,6 +72,28 @@ recorded in the demo app on a 12 GB phone, real time, not sped up.</em></p>
 - [Prior art](#prior-art)
 - [License](#license)
 
+## In-flight features (not yet released)
+
+On feature branches awaiting merge to main; every row is measured, lossless unless noted.
+
+| Feature | Why added | Perf | Problem solved | Branch / PR |
+|---|---|---|---|---|
+| **Session residency** — client-owned `messages`, engine keeps the model warm across chat turns | Agent tooling (OpenAI-style clients) re-prefills the whole conversation every request | Second turn prefills only the delta — 2.46→1.38 s on LFM2.5 (bench harness); up to ~25× on long agent sessions (aider row below) | Stateless HTTP bridge paying full prefill per turn | `feat/serve-bridge-arm64` → #198 |
+| **Append-reuse on hybrids** + `preserve_reasoning` + bridge `--auto-echo` | Hybrid/recurrent models (LFM2.5, Qwen3.5) cleared the whole cache every turn, so residency never engaged | Follow-up turn prefills ~26 tokens reusing ~1700 in ~1.6 s (vs ~40 s full prefill) | Reasoning sits in cache between turns; no plain client echoes it back | `feat/session-residency` |
+| **`--rs-seq N`** — recurrent-state snapshot rollback (experimental, off by default) | Partial `seq_rm` rewinds position but not recurrent cell state on hybrids | Engages reuse; restore not bit-exact pending upstream fix — off by default | Recurrent hybrids fall back to full re-prefill on any rewind | `feat/session-residency`; upstream #29085, fix committed `7b2ec36d1` (PR #29117 closed pending #29085) |
+| **Serve bridge** — OpenAI-compatible endpoint + ARM64 Linux bundle | No HTTP server in the CLI; agent tooling needed one | Plumbing — its measured wins are the warmup and auto-echo rows below | Running the engine from opencode/aider/any OpenAI client | `feat/serve-bridge-arm64` → #198 |
+| **`bmoe-rsbench`** + `cutsweep` | Correctness of hybrid residency rollbacks was unproven | Not a perf feature — proves streamed-state rollback exactness (9/9 EXACT on fix build vs 3/9 vanilla) | Silent stale-state restores; shape-noise confounding in comparisons | `feat/session-residency` |
+| **Warmup replay** — bridge replays the conversation prefix at startup | First turn after bridge start paid cold-cache prefill | ~35× first-turn prefill (2.19→0.06 s on Ling-mini, bench harness) | Cold expert cache on bridge start | `feat/serve-bridge-arm64` → #198 |
+| **Reasoning delta re-embed (`--auto-echo`, aider canonicalization)** | aider re-sends edit-format boilerplate each turn, defeating reuse | Aider follow-ups: ~26 tokens reusing ~1700 in ~1.6 s vs ~40 s full re-prefill (~25×); edit turns still full-clear (structural) | Unmodified OpenAI clients can't cooperate on cache reuse | `feat/session-residency` |
+
+## Forks this project works against
+
+| Fork | Role | Divergence from upstream |
+|---|---|---|
+| `Helldez/BigMoeOnEdge` | This project's canonical repo | n/a |
+| `cjl4hd/llama.cpp` | PR work area for ggml-org contributions | None on `master` — fixes live on short-lived PR branches (#29085 reserve fix open; `fix/rs-rollback-index-shift` pushed, PR #29117 closed pending #29085) |
+| `Helldez/llama.cpp` | Submodule-pin fork (ADR-001: 1-commit exception, with agreement) | Branch `bmoe/expert-ready-hook` (`5236140e5`): ~25-line expert-ready hook for `--overlap`; zero-cost when unregistered, dropped when upstream ships an equivalent |
+
 ## Why this exists
 
 The models people actually want to talk to keep growing faster than the RAM in the devices they

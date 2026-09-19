@@ -1,5 +1,7 @@
 # BigMoeOnEdge — Android example
 
+Feature status (in-flight work, forks, and the feature table) lives in the [root README](../../README.md#in-flight-features-not-yet-released). The app itself has no features pending release.
+
 A minimal chat app that validates the throughput claim on a real phone: pick a pushed
 `.gguf`, type a prompt, and watch the answer stream in while a live panel shows tok/s and
 the per-token compute-vs-flash-I/O split and cache hit rate.
