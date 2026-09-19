@@ -135,6 +135,13 @@ human-authored body untouched.
    reviewer/bot feedback: `gh pr view 29117 --repo ggml-org/llama.cpp --web`. Keep it a
    draft until the description is your own words. Same for #29085 (in draft, body already
    reads final — review once, then ready-for-review).
+   **Overlap scan (2026-09-18, all 200 open ggml-org PRs): no blockers.** Nearest:
+   #28550 (same file as #29117, disjoint regions — no_alloc allocation only), #28927/
+   #28872 (llama-context.cpp, different functions than #29085's 2-line budget add),
+   #29084 (improves the fixture models #29085 registers if it lands first). One watch
+   item: #28976 (WebGPU fused gated_delta_net) is a second GDN kernel implementation —
+   it must keep the snapshot-slot contract (slot p = state p tokens before ubatch end)
+   or the plane law breaks on that backend.
 2. **Engine-side enablement decision** (after the PR is up): once an upstream release
    carries the fix, `--rs-seq` + hybrid edit turns become viable — plan the `--rs-seq`
    flip condition and the hybrid residency un-exclusion (CHANGELOG 0.24.2's exclusion
