@@ -156,6 +156,26 @@ draft with its human-authored body untouched.
 5. **Opencode re-test** with `--auto-echo` on LFM2.5 — stable tool-schema prefix should
    reuse even better than aider.
 6. **Daily driver**: Ling-mini on :8017 when the benchmarking session ends.
+7. **Every wrap-up: refresh the README feature tables** (`In-flight features` + `Forks`;
+   rule 6 lives on `fork/main` `b1f34f7` — see the session-3 addendum below; this branch
+   carries no AGENTS change). Add/remove rows when branches merge, new branch features
+   land, or fork divergence changes.
+8. **Ornith 1.5 joins the test bench** (user request 2026-09-19). File on disk:
+   `~/llm/models/Ornith-1.5-35B-Q4_K_M.gguf` (22 GB, ~2× host RAM; Abliterated variant
+   also present). Arch `qwen35moe` — supported, no registry work. Run, in order:
+   (a) stream gate: `scripts/bench-report.sh` one-command protocol → sanity + baseline;
+   (b) feature matrix: `scripts/bench-features.sh` (warmup / echo / auto-echo / `--rs-seq`)
+   — echo is expected to SKIP structurally on qwen35 templates (baked empty `<think>`),
+   which is itself a data point on a third model; rs-seq reuse-yes/restore-not-bitwise
+   expectation from Qwen3.5-9B; (c) lossy knobs only after lossless cells: `--n-expert-used` 6,
+   drop 75%. Results land per `docs/benchmark-method.md`.
+9. **Cyber-Tiel-Coder-35B-A3B-MTP-UD-Q4_K_M** (also on disk, `qwen35moe`): same matrix
+   as (8) — and it is the MTP-carrying file, so it doubles as the host model for
+   Guess-ahead (`--mtp`) measurements, which currently have device-only numbers
+   (docs/mtp.md).
+10. **After (8)+(9): refresh the evidence tables** — `docs/benchmarks.md`/`docs/serve.md`
+   gain host rows for the second/third qwen35moe models, and the README in-flight table's
+   perf column gets a second data point per residency feature.
 
 ## Resume gates (all must assert positives)
 
