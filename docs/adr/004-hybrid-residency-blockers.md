@@ -133,3 +133,55 @@ look cheap rather than research-grade.
 Cost of the correction: two prior "measurements" (ADR-001 §Context 2, the 0.24.2 CHANGELOG
 bullet) are marked superseded here and in place; no code change results (the default was
 already off and remains off).
+
+## Addendum 3 (2026-09-18, latest): the plane law resolved, the shape-noise confound, and the index-shift fix
+
+Addendum 2's two open items are resolved and its candidate fix is superseded by a better
+one, implemented and verified.
+
+**The d=8 anomaly: resolved.** The sweep's rm-phase ubatch had exactly d tokens, so plane d
+was never written by it — the "anomaly" was a read of a plane holding whatever an earlier
+epoch (or the allocator fill) left there. Arch-independent, no LFM quirk. The kernel-level
+law: a ubatch of n tokens writes planes 0..min(n,K)−1 (GDN `ops.cpp` writes slot
+`n_tokens−1−t` per token, slots ≥ n untouched; LFM2 conv `lfm2.cpp` writes min(n,K) slots),
+single-token steps rewrite only plane 0, and `seq_rm` reads plane d.
+
+**The shape-noise confound (invalidates bitwise cross-shape comparisons).** With NO rollback
+anywhere, splitting a 10-token prefill 6+4 moves logits by up to ~3.6 on this backend — MoE
+routing flips amplify accumulation-order noise. Consequences: upstream's multi-seq fixture
+(`test-recurrent-state-rollback`) **fails on vanilla master** because it compares 12-token-
+ubatch vs 10-token-ubatch histories at eps=1e-7; and every "restore is not bitwise"
+measurement taken this session against a differently-shaped reference is void. Admissible
+evidence is: identical-shape controls, or argmax-level verdicts with a shape-control row.
+The fixture now probes shape noise in-test and downgrades bitwise assertions to
+reported-not-asserted when the backend is shape-dependent.
+
+**Decision: implement the index-shift restore, not ubatch-replay-before-restore.** Track per
+sequence the last multi-token ubatch (end position, planes written) and a floor of planes
+still on the current timeline; on `seq_rm`, restore plane `end − (p0−1)` when that state
+survives the timeline, and refuse when it does not. Reasons: ubatch-replay costs a full
+ubatch at every hybrid edit turn and still cannot resurrect destroyed states (m > d), while
+index-shift is O(1), exact where restoration is possible, and honest (returns false) where
+it is not — the caller's existing re-prefill fallback takes over. Accepted costs: `seq_rm`
+now returns false where it used to return true silently (callers ignoring the return value
+hit the position check on the next decode and fall back); checkpoint-loaded state accepts no
+rollback (a state blob carries a single plane) until the next multi-token ubatch; the
+restore remains subject to backend shape noise like any decode.
+
+**Implementation** (upstream branch `fix/rs-rollback-index-shift` from `cjl4hd/llama.cpp`,
+separate from PR #29085): `rs_epoch_end` / `rs_epoch_planes` / `rs_epoch_lo` per seq set in
+`find_slot` (single-token ubatches don't open an epoch; `prepare`'s dry run is undone;
+`rm_all`, tail invalidation and fresh starts reset; `seq_cp` inherits, `seq_add` follows
+affine shifts, `seq_div` invalidates); `delta-net-base.cpp` conv writes aligned to
+min(n,K) (was: clamped all K slots every ubatch, desyncing conv from GDN planes after
+single-token steps).
+
+**Evidence** (`bmoe-rsbench cutsweep`, the rescuable shape — c tokens cut into the prefill ×
+m single-token steps, per-cell no-rollback shape control): fix build 9/9 EXACT on lfm2moe
+and qwen35; vanilla 3/9 EXACT (m=0) + 4 DIFFER (m≥1) + 2 REFUSED (c+m > n_rs_seq, where
+upstream already failed). Fixture test passes on the fix branch (single-seq bitwise incl.
+checkpoint round-trips; multi-seq shape-gated) after being reshaped to the sound
+decode-then-rollback shape and to assert the new refusal semantics.
+
+Decision 3 stands until this branch is upstream and released; after that, ADR-001 §2's
+flip-on trigger can fire with a submodule bump.

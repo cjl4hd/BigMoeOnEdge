@@ -6,64 +6,81 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-18 (late night, session 2). Phase: hybrid residency blockers —
-the exactness "blocker" was FALSIFIED as a harness bug; the real law is snapshot-plane
-staleness after single-token decode steps, proven on both GDN families; rsbench rewritten
-into a matrix tool.*
-*One-line status: upstream snapshot restore is EXACT when the rollback directly follows the
-last multi-token ubatch (m=0, every tested depth on qwen35; d=1/3/24 on lfm2moe) and DIFFERS
-on both families once any single-token decode precedes the rollback (m≥1, every depth and
-rm shape) — that staleness (not a general non-exactness) keeps `--rs-seq` off; PR #29085 and
-stacked PR #197 both still OPEN.*
+*Resume last rewritten: 2026-09-18 (late night, session 3). Phase: hybrid residency — the
+snapshot-rollback mechanism is fully mapped and FIXED on `cjl4hd/llama.cpp`
+branch `fix/rs-rollback-index-shift` (index-shift restore + honest refusals + delta-net
+conv alignment); verification is argmax-level with per-cell shape controls because the
+backend is ubatch-shape dependent (~3 logits of noise) — which also resolved the d=8
+anomaly.*
+*One-line status: vanilla restores plane d of the last multi-token ubatch, exact only for
+m=0 rollbacks cutting into that ubatch (d < its token count); the fix reads plane d−m when
+the wanted state survives and refuses honestly otherwise (cut cells 9/9 EXACT on lfm2moe
+and qwen35 vs vanilla's 3/9). PR #29085 (reserve, separate) and stacked PR #197 still
+OPEN; the fix branch is committed locally, its PR not yet opened.*
 
 ## State delta (this session)
 
-- **FALSIFICATION: the "non-bit-exact restore" blocker was a harness bug.** The old
-  `bmoe-rsbench diverge` called its continuation through `greedy_generate`, whose first
-  line was `llama_memory_seq_rm(mem, 0, -1, -1)` — a full clear that wipes the pending
-  rollback (`rm_all` → `rs_idx=0`, llama-memory-recurrent.cpp:179). The "restored" side
-  re-prefilled its tail on zeroed recurrent state + partial attention KV. Every prior
-  exactness datum — `40` vs `420` (09-17), depth-3/8 DIFFERs on both families (09-18
-  early) — measured that artifact. Falsified explicitly in ADR-001 (§Context 2) and
-  ADR-004 (Addendum 1 claim struck, Addendum 2 written); CHANGELOG and docs/serve.md
-  corrected; nothing upstream contradicted.
-- **The corrected law (matched-feed harness, both GDN families, pin + patched clone
-  agree):** m=0 (rollback directly after the last multi-token ubatch) is EXACT at every
-  tested depth on qwen35 (d=1,3,8,24; single and batched rm) and on lfm2moe at d=1,3,24;
-  m≥1 (any single-token decode between the last multi-token ubatch and the rollback) is
-  DIFFER on both families at every depth and rm shape. Mechanism: a ubatch writes only
-  min(n_seq_tokens, K) snapshot planes → single-token steps refresh only plane 0, planes
-  d≥1 go stale. That is the server's real edit-turn shape, and it suggests a cheap
-  upstream fix (replay the m trailing tokens through one ubatch before restoring).
-- **Residual open anomaly:** lfm2moe m=0 d=8 DIFFERs identically in both rm shapes
-  (same first diverging token; counting-chain prompt) — unexplained by the plane-staleness
-  law, unreproduced at d=1/3/24 or on qwen35.
-- **Tool rewritten:** `tools/bmoe-rsbench` — `reserve` (unchanged, re-verified exit 134
-  on the pin), `diverge` (fixed: matched-feed reference, no memory touch), new `sweep`
-  (mode × d_rm × m matrix, per-prompt sensitivity probe, predicted-vs-observed per cell).
-  Two instrument lessons baked in: EXACT cells are uninformative unless the prompt's
-  greedy argmax is state-sensitive (the counting chain was not; probe added), and the
-  fox prompt on the pin reports the same. Pin-linked build via the gate build; a
-  clone-linked runner compiles standalone (`g++` line in PROGRESS history below).
-- Reserve crash + PR #29085, routing addendum, and the earlier arc (append reuse,
-  warmup, `--rs-seq` wiring, `preserve_reasoning`, `--auto-echo` + aider
-  canonicalization) unchanged from the previous session's record.
+- **The mechanism, end to end (kernel-traced, then measured):** a ubatch of n tokens
+  writes snapshot planes 0..min(n,K)−1, plane p = state p tokens before the ubatch's end
+  (GDN kernel `ops.cpp`: `target_slot = n_tokens−1−t`; `lfm2.cpp` conv: `n_written =
+  min(n,K)`); single-token steps rewrite only plane 0; `seq_rm` reads plane d. Vanilla is
+  therefore exact iff the wanted state still occupies plane d — m=0 rollbacks cutting into
+  the last multi-token ubatch only. Every other shape restores a stale or never-written
+  state. The "lfm2moe m=0 d=8 anomaly" is resolved: the sweep's rm ubatch had exactly d
+  tokens, so plane d was never written by it — an arch-independent read of garbage, not an
+  LFM quirk.
+- **The backend is ubatch-shape dependent (~O(1) logits).** With NO rollback anywhere,
+  splitting a 10-token prefill 6+4 moves logits by up to 3.6 (MoE routing flips amplify
+  accumulation-order noise). This invalidates every bitwise rollback-vs-reference
+  comparison whose two sides saw different ubatch shapes — including upstream's own
+  multi-seq fixture, which FAILS on vanilla master (max diff 11.6) because it compares a
+  12-token-ubatch history against a 10-token-ubatch history at eps=1e-7. The fixture now
+  probes shape noise in-test and downgrades its bitwise assertions to reported-not-
+  asserted on shape-dependent backends. All earlier `statecmp`/`dsteps` "restore is not
+  bitwise" results carry the same confound; only the d=0 identical-shape control was
+  meaningful (it passed).
+- **The fix (branch `fix/rs-rollback-index-shift` in `~/git/llama.cpp`, committed):**
+  per-seq epoch bookkeeping (`rs_epoch_end` / `rs_epoch_planes` / `rs_epoch_lo`) set per
+  multi-token ubatch in `find_slot`; `seq_rm` restores plane `d−m` when the wanted state
+  survives the timeline and refuses otherwise (destroyed planes, checkpoint-loaded state —
+  a state blob carries a single plane — cleared/invalidated seqs, pending rollback);
+  `delta-net-base.cpp` now writes min(n,K) conv slots like lfm2.cpp (was: clamped all K,
+  desyncing conv from GDN planes after single-token steps); `prepare` dry-run, `rm_all`,
+  tail invalidation, fresh starts, `seq_cp` (inherit) / `seq_add` (affine follow) /
+  `seq_div` (invalidate) all handled. Code-reviewer findings fixed: discarded-timeline
+  planes after rollback+single-replay (the `rs_epoch_lo` floor), stale epochs surviving
+  sequence teardown, OOB in the tool's diff printing.
+- **Verification (new `cutsweep`: c tokens cut into the prefill × m singles, per-cell
+  shape-control row):** fix build EXACT 9/9 cells on lfm2moe AND qwen35; vanilla 3/9 EXACT
+  + 4 DIFFER + 2 REFUSED (c+m > n_rs_seq). Fixture test passes honestly on both cache
+  fills (single-seq bitwise incl. the checkpoint round-trips; multi-seq shape-gated),
+  after being reshaped to the sound decode-then-rollback shape and to assert the new
+  refusal semantics.
 
 ## Artifacts touched (this session)
 
 | File | What |
 |---|---|
-| `tools/rsbench.cpp` | rewritten: fixed diverge harness bug; added sweep + sensitivity probe + predictions |
-| `docs/adr/004` | Addendum 2: falsification, corrected method, measured law, candidate fix; Addendum 1 claim struck through |
-| `docs/adr/001` | §Context 2 superseded note; gates bullet re-derived |
-| `docs/serve.md` | rs-seq paragraph corrected (staleness law, not non-exactness); bench guard sentence updated |
-| `CHANGELOG.md` | 0.24.2: correction note on the old claim; new `bmoe-rsbench` rewritten bullet |
-| this file | resume rewrite + history entry |
-| `/tmp/bmoe-rsbench-clone` | clone-linked runner (regenerate: `g++ -O2 -std=c++17 -I ~/git/llama.cpp/include -I ~/git/llama.cpp/ggml/include tools/rsbench.cpp -o /tmp/bmoe-rsbench-clone -L ~/git/llama.cpp/build/bin -lllama -lggml -lggml-base -lggml-cpu -Wl,-rpath,$HOME/git/llama.cpp/build/bin`) |
+| `tools/rsbench.cpp` | new `cutsweep` mode (cut-into-prefill cells + per-cell shape-control rows, `kCutRsSeq=8`); top-of-file law comment updated to the resolved mechanism; OOB guard on diff printing; INFRA diagnostics |
+| `docs/adr/004` | Addendum 3 (mechanism, shape-noise confound, the fix, cutsweep evidence); Addendum 2 marked superseded-in-part |
+| `CHANGELOG.md` | 0.24.3: cutsweep + d=8 anomaly resolution + upstream fix branch |
+| this file | resume rewrite + history entry (session 3) |
+| `~/git/llama.cpp` branch `fix/rs-rollback-index-shift` | `src/llama-memory-recurrent.{h,cpp}` (epoch bookkeeping + index-shift `seq_rm`), `src/models/delta-net-base.cpp` (conv min(n,K)), `tests/test-recurrent-state-rollback.cpp` (reshape + shape-noise gate) — committed locally |
+| `/tmp/pr-index-shift-description-draft.md` | PR description starting point (template; user rewrites as human) |
+| `/tmp/bmoe-rsbench-clone` | clone-linked runner (regenerate: `g++ -O2 -std=c++17 -I ~/git/llama.cpp/include -I ~/git/llama.cpp/ggml/include tools/rsbench.cpp -o /tmp/bmoe-rsbench-clone ~/git/llama.cpp/build/bin/libllama.so ~/git/llama.cpp/build/bin/libggml.so ~/git/llama.cpp/build/bin/libggml-base.so -Wl,-rpath,$HOME/git/llama.cpp/build/bin`) |
+
+Evidence (ephemeral, regenerable): `/tmp/cutsweep-fix-lfm.txt`, `/tmp/cutsweep-fix-q35.txt`
+(fix build), `/tmp/cutsweep-vanilla-lfm.txt`, `/tmp/cutsweep-vanilla-q35.txt` (vanilla
+baseline; regenerate via `git stash push -- src/ tests/` in the clone, rebuild `llama`,
+run, `git stash pop`, rebuild). Vanilla-master fixture failure log: rerun
+`test-recurrent-state-rollback -m <lfm2 gguf>` on a stash-cleaned build. Earlier
+sweep/statecmp outputs from session 2 remain regenerable via the same commands.
 
 Branch `feat/session-residency` (stacked on `feat/serve-bridge-arm64`), pushed to
 `fork`. Tags: `progress/2026-09-17-residency-warmup`,
 `progress/2026-09-17-snapshot-rollback`, `progress/2026-09-18-reasoning-echo`.
+Upstream work area `~/git/llama.cpp` is now on branch `fix/rs-rollback-index-shift`
+(off origin/master 4fea119de), committed, NOT pushed.
 
 ## Environment state
 
@@ -98,24 +115,28 @@ Branch `feat/session-residency` (stacked on `feat/serve-bridge-arm64`), pushed t
    REVIEW_REQUIRED). When merged it reaches this dependency only via a submodule bump —
    re-run the byte-identity gates after the bump (ADR-001's bump rule), and re-run
    `bmoe-rsbench reserve` on the new pin (the backtrace site differs pin↔master).
-3. **Upstream the staleness fix (phase 2, next).** The m≥1 law + the min(n_seq_tokens, K)
-   write rule suggest the fix: before applying a pending rollback of depth d after m
-   single-token steps, replay the m trailing tokens through one multi-token ubatch
-   (refreshing planes 0..min(m, K−1)), or maintain planes per token at decode time.
-   Route per ADR-004 Addendum 1: upstream PR from the user's fork; clone `~/git/llama.cpp`
-   is the work area. Also resolve the lfm2moe m=0 d=8 anomaly (or record it upstream as
-   a separate datum) before/with the PR.
+3. **Open the fix PR (next).** Branch `fix/rs-rollback-index-shift` in `~/git/llama.cpp`
+   is complete and verified locally; push it to `cjl4hd/llama.cpp` and open the PR against
+   ggml-org from it. Separate from #29085 (reserve). The description must be written as a
+   human per the ggml-org bot's rules — `/tmp/pr-index-shift-description-draft.md` is only
+   a starting point following the PR template. Flag explicitly: `seq_rm` now returns false
+   where it used to return true (destroyed states); callers ignoring the return value will
+   hit the position-check decode failure and fall back to re-prefill.
+4. **Shape-dependent-backend caveat for any future bitwise claim:** any exactness
+   comparison against a differently-shaped reference is meaningless here (~3 logits of
+   noise from ubatch splits alone, MoE routing flips). Only identical-shape controls
+   (d=0) or argmax-level verdicts with shape-control rows are admissible evidence.
 
 ## Next actions (ordered)
 
-1. **Upstream the snapshot-staleness fix** (ADR-004 Addendum 2): reproduce the m≥1 law in
-   the clone, implement ubatch-replay-before-restore (or per-token plane maintenance),
-   extend `test-recurrent-state-rollback` to generate m≥1 tokens before the rollback (the
-   current fixture only tests m=0 — its EXACT pass is why the staleness hid), open the PR
-   from `cjl4hd/llama.cpp`. Entry: work in `~/git/llama.cpp`.
-2. **Resolve the lfm2moe m=0 d=8 anomaly** (identical DIFFER in both rm shapes): check
-   whether depth-8 plane content itself is wrong at m=0 (dump/compare planes d=8 vs a
-   replayed prefill state in the clone) or whether the restore path mis-indexes that depth.
+1. **Open the fix PR**: `git push origin fix/rs-rollback-index-shift` in `~/git/llama.cpp`,
+   then `gh pr create --repo ggml-org/llama.cpp` — description rewritten by the user as a
+   human from `/tmp/pr-index-shift-description-draft.md` (template-compliant starting
+   point). Note in it: refusals are a behavior change; #29085 is unrelated and separate.
+2. **Engine-side enablement decision** (after the PR is up): once an upstream release
+   carries the fix, `--rs-seq` + hybrid edit turns become viable — plan the `--rs-seq`
+   flip condition and the hybrid residency un-exclusion (CHANGELOG 0.24.2's exclusion
+   note) for a future session; requires a submodule bump + full gates per ADR-001.
 3. **Watch #29085 and #197** (`gh pr view 29085 --repo ggml-org/llama.cpp`); execute the
    stacked-PR plan when #197 merges; do the bump + gates when #29085 merges.
 4. **Measure Ling-mini edit-turn reuse** with captured aider payloads — the free
@@ -135,6 +156,10 @@ Branch `feat/session-residency` (stacked on `feat/serve-bridge-arm64`), pushed t
 6. `test -x build/tools/bmoe-rsbench` → exists (needs `-DBMOE_BUILD_TOOLS=ON`).
 7. `./build/tools/bmoe-rsbench reserve <lfm2 gguf>` → exit 134 on the unfixed pin
    (regression signal for the reserve repro; flips to 0 after the #29085 bump).
+8. `cd ~/git/llama.cpp && git branch --show-current && git status --short` →
+   `fix/rs-rollback-index-shift`, clean tree (the fix is committed); re-verify with
+   `/tmp/bmoe-rsbench-clone cutsweep <lfm2 gguf>` → 9/9 EXACT (rebuild the runner and the
+   clone `llama` target first if the branch moved).
 
 If a gate fails: re-derive from artifacts (git log, docs/adr, history below) before
 continuing. Never weaken a gate to make it pass.
@@ -451,3 +476,60 @@ Gates all green after the rewrite: clean build, 13/13 ctest, `reserve` still exi
 the pin. No code-behavior change anywhere in the engine — the falsification changes
 documentation and the upstream plan, not this repo's defaults (`--rs-seq` stays off for
 the staleness reason now, not the non-exactness reason before).
+
+## 2026-09-18 (late, session 3) — the mechanism mapped end to end; the index-shift fix
+
+Goal (next action 1 of the previous resume): the staleness fix. Executed — but only after
+the instrument itself was fixed one more time, which is where the session's real findings
+live.
+
+**Kernel-level plane law, final form** (GDN: `ggml-cpu/ops.cpp` `target_slot = n_tokens−1−t`,
+slots ≥ n never written; conv: `lfm2.cpp` `n_written = min(n, K)`, `delta-net-base.cpp`
+pre-fix clamped ALL K slots every ubatch; `s_copy` maps `rs_idx` 1:1 to plane rows): a
+ubatch of n tokens writes planes 0..min(n,K)−1, plane p = state p tokens before its end;
+single-token steps rewrite only plane 0. `seq_rm` reads plane d. Consequence: exact iff
+the wanted state still occupies plane d — m=0 cuts into the last multi-token ubatch only.
+The **d=8 anomaly is resolved**: the sweep's rm ubatch had exactly d tokens → plane d was
+never written by it → garbage read, arch-independent (not an LFM quirk).
+
+**The shape-noise confound (the session's decisive discovery).** A no-rollback control
+(same tokens, 10-token prefill vs 6+4 split) moves logits by up to **3.6** on this backend
+(MoE routing flips amplify accumulation-order noise). This invalidated: (a) upstream's own
+multi-seq fixture, which FAILS on vanilla master (diff 11.6) comparing 12-token-ubatch vs
+10-token-ubatch histories at eps=1e-7 — a bar nothing can meet; (b) every
+`statecmp`/`dsteps` "restore is not bitwise" result from earlier this session (only the
+d=0 identical-shape control was sound, and it passed). Lesson recorded as an open-questions
+rule: bitwise comparisons need identical ubatch shapes; everything else is argmax + shape
+controls.
+
+**The fix** (`~/git/llama.cpp`, branch `fix/rs-rollback-index-shift` off origin/master
+4fea119de): per-seq epoch bookkeeping (`rs_epoch_end` / `rs_epoch_planes` / `rs_epoch_lo`)
+set in `find_slot` per multi-token ubatch; `seq_rm` restores plane `d−m` when the wanted
+state survives, refuses honestly otherwise (destroyed planes; checkpoint-loaded state — a
+state blob carries a single plane, so nothing exists to roll back into; cleared seqs;
+pending rollback); `delta-net-base.cpp` conv writes aligned to min(n,K) (was: clamped all
+K — desynced conv from GDN planes after single-token steps); `prepare` dry-run saves/
+restores the bookkeeping; `rm_all`, tail invalidation and fresh starts reset it;
+`seq_cp` inherits, `seq_add` follows affine shifts, `seq_div` invalidates. Code review
+caught and fixed: discarded-timeline planes after rollback+single-token replay (the
+`rs_epoch_lo` floor), stale epochs surviving sequence teardown, fixture's dst-side
+impossible rollback (now asserts the refusal).
+
+**Verification** (`cutsweep`, new rsbench mode: c tokens cut into the prefill × m
+single-token steps, each cell with a no-rollback SHAPE-control row — the rescuable shape,
+unlike `sweep`'s unrescuable ones):
+
+- fix build: **9/9 EXACT** on lfm2moe AND qwen35 (controls SAME everywhere)
+- vanilla: 3/9 EXACT (m=0), 4 DIFFER (m≥1), 2 REFUSED (c+m > n_rs_seq)
+- fixture test passes on both cache fills: single-seq bitwise incl. checkpoint round-trips
+  and dirty-context load; multi-seq shape-gated (probe in-test, asserts mechanics + refusal
+  semantics, reports diffs on shape-dependent backends)
+
+Tool notes: `cutsweep` uses `n_rs_seq=8` because LFM2 archs abort at graph reserve with
+larger values until #29085 lands (runner must not depend on that PR). `predict()` and the
+sweep's top-of-file comment now document vanilla's behavior; `sweep` cells against the fix
+build report REFUSED/INFRA, which is the honest verdict for those shapes.
+
+Evidence: `/tmp/cutsweep-{fix,vanilla}-{lfm,q35}.txt` (vanilla baseline via stash push/
+pop around a rebuild — regenerable; see Artifacts). Upstream branch committed locally,
+NOT pushed; PR description draft at `/tmp/pr-index-shift-description-draft.md`.

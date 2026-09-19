@@ -28,23 +28,19 @@
 //     (conv too-new);
 //   - seq_rm rollback depth d reads plane d ("d back") via the per-seq rs_idx gather, so it
 //     is exact only while the needed planes still hold their true "d back" values.
-// Measured law (2026-09-18, both qwen35 and lfm2moe, engine-shaped context — see
-// docs/adr/004 addendum 2 for the full matrix):
-//   m = 0  (rollback directly after the last multi-token ubatch):
-//     EXACT at every swept depth on qwen35 (single and batched rm alike), and on lfm2moe at
-//     d = 1, 3, 24 — i.e. upstream's snapshot restore roundtrip is exact in the regime its
-//     fixture test exercises, and the earlier "non-bit-exact restore" claims were an artifact
-//     of a harness whose replay wiped its own pending rollback with a full seq_rm(-1,-1).
-//   m >= 1 (single-token decode steps between the last multi-token ubatch and the rollback):
-//     DIFFER on BOTH families at every swept depth and rm shape. Single-token steps refresh
-//     only snapshot plane 0 (a ubatch writes min(n_seq_tokens, K) planes), so planes d >= 1
-//     go stale — this is the server's real edit-turn shape and the reason --rs-seq stays
-//     default-off. A candidate upstream fix: replay the m trailing tokens through one
-//     ubatch (refreshing the planes) before restoring, or maintain the planes per token.
-//   Residual anomaly (unresolved): lfm2moe at m=0, d=8 differs identically in both rm shapes,
-//     which neither family-wide mechanism above explains (see ADR-004, open item).
-// Hence per cell (mode, d_rm, m) the tool predicts DIFFER iff m >= 1 (plus the lfm2moe d=8
-// m=0 exception when running that arch), and prints predicted-vs-observed per cell.
+// Resolved mechanism (2026-09-18, qwen35 + lfm2moe; see docs/adr/004 addendum 3):
+//   - a ubatch of n tokens writes planes 0..min(n,K)-1 with plane p = state p tokens before
+//     its end; single-token steps rewrite only plane 0. A rollback of depth d reads plane d.
+//   - NONE of the `sweep` cells below can be restored by any implementation: the wanted state
+//     sat in plane 0 (single rm phase — overwritten by the first single step) or in a plane
+//     the d-token rm ubatch never wrote (batched — the "d=8 anomaly" was a read of a
+//     never-written plane). Their EXACT verdicts were argmax robustness on an insensitive
+//     prompt; against the index-shift fix they report REFUSED/INFRA, which is the honest
+//     answer. predict() documents vanilla's behavior only.
+//   - bitwise comparisons against a differently-shaped reference are meaningless on this
+//     backend: with NO rollback, splitting a prefill 10 vs 6+4 moves logits by up to ~3.6
+//     (MoE routing flips). Every `statecmp`/`dsteps` DIVERGE has that confound; only the d=0
+//     control (identical shapes) is clean. Use `cutsweep` (argmax + shape-control rows).
 //
 // Public API only (llama.h). Build via the engine's normal configure:
 //   cmake -B build -DBMOE_BUILD_TOOLS=ON && cmake --build build --target bmoe-rsbench
@@ -52,6 +48,9 @@
 #include <algorithm>
 #include <string_view>
 #include <cstdio>
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -349,11 +348,263 @@ void run_sweep(llama_model * model, const llama_vocab * vocab, bool fox_mode) {
     }
 }
 
+// ---- cutsweep: the rescuable shape ------------------------------------------
+// None of the sweep's cells can be restored exactly by ANY implementation: the
+// wanted state either sat in plane 0 (single-mode rm phase, overwritten by the
+// first single step) or in a plane the rm ubatch never wrote (batched rm phase of
+// exactly d tokens). The shape the index-shift fix rescues is the edit-turn shape:
+// prefill P (one ubatch, planes p = S(P-1-p)), m single-token decodes (plane 0
+// only), then a rollback CUTTING INTO THE PREFILL by c tokens (depth c + m).
+// Vanilla reads plane c+m (stale by m tokens); the fix reads plane c (exact).
+// At m = 0 both coincide, so the flip is visible only at m >= 1.
+//
+// Verdicts are argmax-level (greedy stream vs an identically-fed no-rollback
+// context), so each cell carries a SHAPE control row: the same feed with no
+// rollback, split as [0,P-c) + [P-c,P+m) vs P + m singles. The backend is
+// ubatch-shape dependent (MoE routing flips), so a DIFFER on the rollback row is
+// only attributable to the restore when its SHAPE row is SAME.
+// n_rs_seq = 8 (K = 9 planes, covers c <= 8): LFM2 archs abort at graph reserve with larger
+// values until the node-budget fix (ggml-org/llama.cpp#29085) lands — a separate PR from the
+// index-shift fix, so the runner must not depend on it.
+constexpr uint32_t kCutRsSeq = 8;
+
+int run_cut_cell(llama_model * model, const llama_vocab * vocab, const std::vector<llama_token> & prompt,
+                 const std::vector<llama_token> & seed, int c, int m, bool control,
+                 std::vector<llama_token> & sa, std::vector<llama_token> & sb) {
+    const int P = (int) prompt.size();
+    llama_context * ctx_a = make_ctx(model, kNCtx, kCutRsSeq);
+    llama_context * ctx_b = make_ctx(model, kNCtx, kCutRsSeq);
+    if (!ctx_a || !ctx_b) {
+        fprintf(stderr, "bmoe-rsbench: cut cell c=%d m=%d: context creation failed\n", c, m);
+        if (ctx_a) { llama_free(ctx_a); }
+        if (ctx_b) { llama_free(ctx_b); }
+        return 2;
+    }
+
+    // the tail every variant ends up having processed: prompt[P-c..P) + seed[0..m)
+    std::vector<llama_token> tail(prompt.begin() + (P - c), prompt.end());
+    tail.insert(tail.end(), seed.begin(), seed.begin() + m);
+
+    int status = 2;
+    do {
+        // B: prefill P as one ubatch, m singles, no rollback
+        if (!decode(ctx_b, prompt.data(), P)) { break; }
+        bool ok = true;
+        for (int i = 0; i < m && ok; ++i) { ok = decode(ctx_b, &seed[i], 1); }
+        if (!ok) { break; }
+
+        if (control) {
+            // A (shape control): no rollback; prefill [0,P-c) then the tail as ONE ubatch —
+            // exactly the ubatch history a perfect restore + replay produces
+            if (!decode(ctx_a, prompt.data(), P - c)) { break; }
+            if (!decode(ctx_a, tail.data(), (int) tail.size())) { break; }
+        } else {
+            // A: same feed as B, then rollback into the prefill and replay the tail
+            if (!decode(ctx_a, prompt.data(), P)) { break; }
+            for (int i = 0; i < m && ok; ++i) { ok = decode(ctx_a, &seed[i], 1); }
+            if (!ok) { break; }
+            if (!llama_memory_seq_rm(llama_get_memory(ctx_a), 0, P - c, -1)) { status = 3; break; }
+            if (!decode(ctx_a, tail.data(), (int) tail.size())) { break; }
+        }
+        sa = gen_greedy(ctx_a, 8, vocab);
+        sb = gen_greedy(ctx_b, (int) sa.size(), vocab);
+        status = first_diff(sa, sb) < 0 ? 0 : 1;
+    } while (false);
+    if (status == 2) { fprintf(stderr, "bmoe-rsbench: cut cell c=%d m=%d: decode failed\n", c, m); }
+
+    llama_free(ctx_a);
+    llama_free(ctx_b);
+    return status;  // 0 EXACT, 1 DIFFER, 2 infra, 3 refused
+}
+
+void run_cut_sweep(llama_model * model, const llama_vocab * vocab) {
+    const char * prompt_text =
+        "The quick brown fox jumps over the lazy dog. Repeat after me, exactly and only: hello world\n";
+    const std::vector<llama_token> prompt = tokenize(vocab, prompt_text);
+    const int P = (int) prompt.size();
+
+    llama_context * gold = make_ctx(model, kNCtx, 0);
+    if (!gold) { printf("CUTSWEEP: context creation failed\n"); return; }
+    if (!decode(gold, prompt.data(), P)) { printf("CUTSWEEP: prefill failed\n"); llama_free(gold); return; }
+    std::vector<llama_token> seed = gen_greedy(gold, 16, vocab);
+    llama_free(gold);
+
+    char arch_buf[64] = {0};
+    llama_model_meta_val_str(model, "general.architecture", arch_buf, sizeof(arch_buf));
+    printf("CUTSWEEP %s | prompt=%d tok, n_rs_seq=%u, n_gen=8, axes: c (prefill tokens cut) x m (singles)\n"
+           "  expectation: vanilla EXACT at m=0 / DIFFER at m>=1 (reads plane c+m; REFUSED once c+m > n_rs_seq);"
+           " fix EXACT everywhere\n",
+           arch_buf[0] ? arch_buf : "unknown-arch", P, kCutRsSeq);
+
+    static const int cs[] = {1, 3, 8};
+    static const int ms[] = {0, 1, 4};
+    for (int c : cs) {
+        for (int m : ms) {
+            if (m > (int) seed.size() || c >= P) { continue; }
+            std::vector<llama_token> sa, sb;
+            const int rs = run_cut_cell(model, vocab, prompt, seed, c, m, false, sa, sb);
+            std::string diff_note;
+            if (rs == 1) {
+                const int fd = first_diff(sa, sb);
+                if (fd >= 0 && fd < (int) std::min(sa.size(), sb.size())) {
+                    diff_note = "  first diff tok: A=\"" + detok(vocab, {sa[fd]}) + "\" B=\"" + detok(vocab, {sb[fd]}) + "\"";
+                } else {
+                    diff_note = "  streams differ in length (EOS)";
+                }
+            }
+            const int rc = run_cut_cell(model, vocab, prompt, seed, c, m, true, sa, sb);
+            printf("CELL c=%d m=%d : rollback %s | shape-control %s%s\n", c, m,
+                   rs == 0 ? "EXACT" : rs == 1 ? "DIFFER" : rs == 3 ? "REFUSED" : "INFRA",
+                   rc == 0 ? "SAME" : rc == 1 ? "NOISE" : "INFRA", diff_note.c_str());
+            fflush(stdout);
+        }
+    }
+}
+
+// ---- dsteps: empirical restore map ------------------------------------------
+// Static derivations of the snapshot-plane algebra kept getting falsified by
+// measurements, so map the restore empirically instead: for each rollback depth
+// d in 1..d_max a fresh A/B pair runs the identical feed, A rolls back and
+// replays, and the next-token logits are compared bitwise over forced steps.
+// The set of d that comes back exact reveals which temporal state the restore
+// actually reads — no theory involved.
+int run_statecmp(llama_model * model, const llama_vocab * vocab, int d, int m, const char * mode);
+
+int run_dsteps(llama_model * model, const llama_vocab * vocab, int d_max, int m, const char * mode) {
+    printf("DSTEPS %s m=%d | mapping restore exactness over d=1..%d\n", mode, m, d_max);
+    fflush(stdout);
+    for (int d = 1; d <= d_max; ++d) {
+        const int rc = run_statecmp(model, vocab, d, m, mode);
+        printf("  d=%2d -> %s\n", d,
+               rc == 0 ? "EXACT" : rc == 6 ? "DIVERGE" : rc == 2 ? "REFUSED" : "INFRA");
+        fflush(stdout);
+    }
+    return 0;
+}
+
+// ---- statecmp: bitwise logits probe -----------------------------------------
+// Argmax-stream verdicts are coarse, and comparing serialized state blobs is
+// confounded: the blob embeds all K snapshot planes whose WRITE HISTORIES
+// legitimately differ between a rolled-back context and a never-rolled-back one,
+// even when the restore is perfect. The clean signal is the next-token LOGITS:
+// they depend only on the current state and never touch the snapshot planes.
+// A rolls back + replays, B runs the same feed without the rollback; both are
+// then stepped N times with identical forced tokens (the golden continuation),
+// comparing the full logits row bitwise after every step. First mismatching
+// step localizes the divergence; all-match means the restore is bitwise-exact.
+int run_statecmp(llama_model * model, const llama_vocab * vocab, int d, int m, const char * mode) {
+    const bool  single = strcmp(mode, "single") == 0;
+    constexpr int n_steps = 4;
+    const char * prompt_text =
+        "The quick brown fox jumps over the lazy dog. Repeat after me, exactly and only: hello world\n";
+    const std::vector<llama_token> prompt = tokenize(vocab, prompt_text);
+    const int P = (int) prompt.size();
+
+    // Golden chain on a snapshot-free context: m + d rm-phase tokens + n_steps forced steps.
+    llama_context * gold = make_ctx(model, kNCtx, 0);
+    if (!gold) { printf("STATECMP: context creation failed\n"); return 3; }
+    if (!decode(gold, prompt.data(), P)) { printf("STATECMP: prefill failed\n"); llama_free(gold); return 3; }
+    std::vector<llama_token> seed = gen_greedy(gold, m + d + n_steps, vocab);
+    llama_free(gold);
+    if ((int) seed.size() < m + d + n_steps) { printf("STATECMP: golden chain too short\n"); return 3; }
+
+    llama_context * ctx_a = make_ctx(model, kNCtx, kNRsSeq);
+    llama_context * ctx_b = make_ctx(model, kNCtx, kNRsSeq);
+    if (!ctx_a || !ctx_b) { printf("STATECMP: context creation failed\n"); return 3; }
+
+    int rc = 3;
+    do {
+        // B: same feed minus the replay (rollback only removes positions — no re-feed),
+        // so A (rollback + replay) vs B (rm-phase feed) differ iff the restore itself differs;
+        // d=0 (no rollback) must come back bitwise-identical — that's the soundness control
+        if (!decode(ctx_b, prompt.data(), P)) { fprintf(stderr, "bmoe-rsbench: B prefill failed\n"); break; }
+        bool ok = true;
+        for (int i = 0; i < m && ok; ++i) { ok = decode(ctx_b, &seed[i], 1); }
+        if (ok) {
+            if (single) {
+                for (int i = 0; i < d && ok; ++i) { ok = decode(ctx_b, &seed[m + i], 1); }
+            } else {
+                ok = decode(ctx_b, seed.data() + m, d);
+            }
+        }
+        if (!ok) { fprintf(stderr, "bmoe-rsbench: B feed failed\n"); break; }
+
+        // A: same feed, then the rollback + replay under test
+        llama_memory_t mem_a = llama_get_memory(ctx_a);
+        if (!decode(ctx_a, prompt.data(), P)) { fprintf(stderr, "bmoe-rsbench: A prefill failed\n"); break; }
+        ok = true;
+        for (int i = 0; i < m && ok; ++i) { ok = decode(ctx_a, &seed[i], 1); }
+        if (ok) {
+            if (single) {
+                for (int i = 0; i < d && ok; ++i) { ok = decode(ctx_a, &seed[m + i], 1); }
+            } else {
+                ok = decode(ctx_a, seed.data() + m, d);
+            }
+        }
+        if (!ok) { fprintf(stderr, "bmoe-rsbench: A feed failed\n"); break; }
+        if (d > 0) {
+            if (!llama_memory_seq_rm(mem_a, 0, P + m, -1)) {
+                printf("STATECMP: seq_rm refused (depth %d > n_rs_seq?)\n", d);
+                rc = 2;
+                break;
+            }
+            if (!decode(ctx_a, seed.data() + m, d)) { fprintf(stderr, "bmoe-rsbench: A replay failed\n"); break; }
+        } // d == 0: negative control — identical feeds, no rollback; must be bitwise-exact
+
+        // N forced identical steps; logits must be bitwise-equal at every step.
+        // The forced token is FIXED across depths (seed[0], not the timeline's next token)
+        // so the per-step logits hashes are comparable across d runs — the whole point is
+        // to cross-reference which temporal state the restore actually returns.
+        printf("STATECMP %s d=%d m=%d | comparing logits bitwise over %d forced steps\n", mode, d, m, n_steps);
+        int first_bad = -1;
+        double max_diff = 0.0;
+        for (int j = 0; j < n_steps; ++j) {
+            const llama_token t = seed[0];
+            if (!decode(ctx_a, &t, 1) || !decode(ctx_b, &t, 1)) { fprintf(stderr, "bmoe-rsbench: forced step failed (step %d)\n", j); ok = false; break; }
+            const float * la = llama_get_logits_ith(ctx_a, 0);
+            const float * lb = llama_get_logits_ith(ctx_b, 0);
+            if (!la || !lb) { fprintf(stderr, "bmoe-rsbench: logits unavailable\n"); ok = false; break; }
+            const int n_vocab = llama_vocab_n_tokens(vocab);
+            const bool step_eq = memcmp(la, lb, (size_t) n_vocab * sizeof(float)) == 0;
+            if (!step_eq) {
+                // FNV-1a over the logits rows: lets us cross-reference A's restored state
+                // against B's clean states at OTHER depths (is the restore a neighbor state?)
+                uint64_t ha = 0, hb = 0;
+                for (int v = 0; v < n_vocab; ++v) {
+                    uint32_t xa, xb; memcpy(&xa, &la[v], 4); memcpy(&xb, &lb[v], 4);
+                    ha = ha * 1099511628211ULL + xa; hb = hb * 1099511628211ULL + xb;
+                }
+                printf("  STEP %d hA=%016llx hB=%016llx DIFF\n", j, (unsigned long long) ha, (unsigned long long) hb);
+            }
+            if (!step_eq && first_bad < 0) {
+                first_bad = j;
+                for (int v = 0; v < n_vocab; ++v) { max_diff = std::max(max_diff, (double) std::fabs(la[v] - lb[v])); }
+            }
+        }
+        if (!ok) { break; }
+        if (first_bad < 0) {
+            printf("  RESULT: BITWISE-EXACT — logits identical at all %d steps (restore is a clean time-shift)\n", n_steps);
+            rc = 0;
+        } else {
+            printf("  RESULT: LOGITS DIVERGE at forced step %d (max |diff| %g) — restore is not bitwise\n", first_bad, max_diff);
+            rc = 6;
+        }
+    } while (false);
+
+    llama_free(ctx_a);
+    llama_free(ctx_b);
+    return rc;
+}
+
 } // namespace
 
 int main(int argc, char ** argv) {
     if (argc < 3) {
-        fprintf(stderr, "usage: bmoe-rsbench reserve|diverge <model.gguf> [n_gen] | sweep <model.gguf>\n");
+        fprintf(stderr,
+                "usage: bmoe-rsbench reserve|diverge <model.gguf> [n_gen] | sweep <model.gguf> [fox]\n"
+                "       bmoe-rsbench statecmp <model.gguf> [d=8] [m=0] [single|batched]\n"
+                "       bmoe-rsbench dsteps <model.gguf> [d_max=8] [m=0] [single|batched]\n"
+                "       bmoe-rsbench cutsweep <model.gguf>   (cut-into-prefill cells + shape-noise controls)\n");
         return 1;
     }
     const char * mode       = argv[1];
@@ -408,6 +659,30 @@ int main(int argc, char ** argv) {
 
     if (strcmp(mode, "sweep") == 0) {
         run_sweep(model, vocab, argc > 3 && strcmp(argv[3], "fox") == 0);
+        llama_model_free(model);
+        return 0;
+    }
+
+    if (strcmp(mode, "cutsweep") == 0) {
+        run_cut_sweep(model, vocab);
+        llama_model_free(model);
+        return 0;
+    }
+
+    if (strcmp(mode, "statecmp") == 0) {
+        const int      d  = argc > 3 ? atoi(argv[3]) : 8;
+        const int      m  = argc > 4 ? atoi(argv[4]) : 0;
+        const char * cm = argc > 5 ? argv[5] : "single";
+        const int rc = run_statecmp(model, vocab, d, m, cm);
+        llama_model_free(model);
+        return rc;
+    }
+
+    if (strcmp(mode, "dsteps") == 0) {
+        const int      dmax = argc > 3 ? atoi(argv[3]) : 8;
+        const int      m    = argc > 4 ? atoi(argv[4]) : 0;
+        const char * cm    = argc > 5 ? argv[5] : "single";
+        run_dsteps(model, vocab, dmax, m, cm);
         llama_model_free(model);
         return 0;
     }

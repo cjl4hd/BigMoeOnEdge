@@ -4,6 +4,30 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project aims to follow
 Semantic Versioning.
 
+## [0.24.3] - 2026-09-18
+
+### Changed
+
+- **`bmoe-rsbench` gains `cutsweep`**: the rescuable rollback shape (c tokens cut into the
+  prefill × m single-token steps) with a per-cell no-rollback shape-control row. Baseline
+  results on the unfixed pin: vanilla restores plane d of the last multi-token ubatch —
+  exact only at m=0 (3/9 cells) and silently stale/garbage otherwise (the m-law of 0.24.2's
+  session, plus the resolved "d=8 anomaly": a read of a plane the rm ubatch never wrote).
+  Top-of-file mechanism comment updated to the resolved plane law; the old sweep's EXACT
+  cells are documented as argmax robustness on unrescuable shapes.
+
+### Documented
+
+- **ADR-004 Addendum 3**: the kernel-level snapshot-plane law; the ubatch-shape-noise
+  confound (split prefills move logits by ~3.6 with no rollback anywhere — no bitwise
+  comparison against a differently-shaped reference is admissible on this backend, and
+  upstream's own multi-seq fixture fails on vanilla master for exactly this reason); the
+  decision to implement the upstream index-shift restore (`fix/rs-rollback-index-shift` on
+  `cjl4hd/llama.cpp`, separate from reserve PR #29085) over ubatch-replay-before-restore,
+  with its accepted costs (`seq_rm` honest refusals, no rollback into checkpoint-loaded
+  state). Engine code unchanged; hybrid edit turns still full-clear until the upstream fix
+  lands and a submodule bump carries it.
+
 ## [0.24.2] - 2026-09-16
 
 ### Added
