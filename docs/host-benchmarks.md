@@ -74,7 +74,7 @@ verified, no degeneration, with divergence-turn prefill halving on Cyber-Tiel (4
   --io-threads 4 --overlap --dense-weights anon`. Lossless, measured here at +48–70%
   decode over mmap with 4–8× fewer major faults.
 - Models that fit RAM: plain mmap, no streaming flags. Measured at +12% decode over the
-  streaming stack on LFM2.5 (9.69 vs 8.64 tok/s) with 7× faster prefill — turning on
+  streaming stack on LFM2.5 (9.69 vs 8.64 tok/s) with ~5× faster prefill — turning on
   streaming for a resident model is pure overhead.
 - Agent / OpenAI-client serving: run the bridge with `--auto-echo` and default warmup on.
   Expect follow-up-turn prefill to collapse to tens of tokens (from the first follow-up
