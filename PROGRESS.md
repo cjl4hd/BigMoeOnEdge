@@ -548,3 +548,11 @@ Evidence: `/tmp/cutsweep-{fix,vanilla}-{lfm,q35}.txt` (vanilla baseline via stas
 pop around a rebuild — regenerable; see Artifacts). Upstream branch pushed to
 `cjl4hd/llama.cpp` and opened as ggml-org PR #29117 (draft); PR description draft at
 `/tmp/pr-index-shift-description-draft.md`.
+
+Session 3 addendum (2026-09-19): the root-README feature tables (`In-flight features` +
+`Forks`) and the AGENTS.md rule-6 wrap-up mandate landed on **`cjl4hd:main`** (`b1f34f7`),
+not on this branch — the arc stays free of them and the tables document unreleased work
+from the canonical repo's point of view. An intermediate commit carrying them
+(`cc8a999`) was force-pushed off this branch at the user's request. Rule 6 lives on
+`fork/main` for now; this branch picks it up at the next main→arc sync (or the eventual
+stacked PR does).
