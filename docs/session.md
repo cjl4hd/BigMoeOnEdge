@@ -46,7 +46,11 @@ then clears the KV and re-prefills the whole prompt for that turn (correct, just
 thinking **on**, the template strips the previous turn's reasoning on re-render, so the rendered
 prefix diverges at the last answer and up to one answer's worth of tokens is re-prefilled per turn;
 with thinking **off** (the app default) the re-fed suffix is just the new user turn plus a few
-wrapper tokens.
+wrapper tokens. How much of that cost reuse claws back is **template-sensitive**, not
+arch-sensitive: measured across the host matrix (see
+[host-benchmarks.md](host-benchmarks.md)), two same-family archs diverged — one reused from the
+turn after echo was enabled, one never reconciled despite the rewrite engaging — so the
+first follow-up's `n_reused` is the signal to check on any new chat template.
 
 **Reasoning is returned, not discarded.** On a thinking model the Session parses the reasoning span
 out of the raw stream and carries it in its own field (`TokenMetrics`/`RunResult::reasoning`,

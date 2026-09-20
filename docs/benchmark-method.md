@@ -223,3 +223,23 @@ A 12 GB, UFS 4.x Snapdragon-class phone and a 16 GB x86 laptop with an NVMe driv
 models, two `--overlap` rows among them) and `scripts/bench-analyze.py` (mean/min/max, median,
 p5/p95, plus the pressure table). Community rows are in
 [community-benchmarks.md](community-benchmarks.md).
+
+### The host campaign (docs/host-benchmarks.md)
+
+The host matrix covers eight models spanning every profile — qwen35moe hybrids at ~2× RAM
+(Cyber-Tiel, Ornith, Qwen3.6), an LFM hybrid, Qwen3-30B, and four fits-RAM transformers
+(LFM2.5, Ling-mini, OLMoE) — with three cells per model: (a) mmap baseline, (b) streaming, and
+a five-cell correctness suite (c1–c5) driving warmup, auto-echo and divergence shapes through the
+serve bridge. Its protocol carries three rules learned the hard way, all of which generalize to
+the on-device suites:
+
+- **MAXTOK must be laddered per model, not assumed.** A thinking model whose answer-check FAILs
+  may simply have its think span truncated (empty content) — Qwen3-30B needed 768 tokens where
+  192 truncated its 1313-char reasoning. Raise the budget until the reply terminates.
+- **Check `n_reused` on the first follow-up of any new chat template.** Echo reuse is
+  template-sensitive: two same-family archs diverged (Cyber-Tiel reused from the second turn,
+  Qwen3.6 never reconciled). The template, not the arch, decides.
+- **On a rewind refusal, read the `depth=` in the log.** The rs-seq snapshot budget bounds turn
+  depth, not context — a heavy thinker's single turn can outrun any affordable plane count
+  (Qwen3.6: depth 135 vs 64 planes). The engine refuses honestly and full-clears; correctness is
+  never at risk.
