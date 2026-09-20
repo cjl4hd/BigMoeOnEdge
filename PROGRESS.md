@@ -6,65 +6,74 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-19 (session 9 wrap-up). Phase: host bench campaign —
-five models published (Ornith, Cyber-Tiel, LFM2.5, Laguna, Ling-mini); queue head is
-Qwen3-30B.*
-*One-line status: arc pushed (`8958e88..b7f3cd0`); Ling-mini-2.0 batch measured and
-published (`8104b26` + cache-size fix `8605806`) — the second plain-transformer MoE
-(`bailingmoe2`, verified in llama-arch.cpp; the rollback list's BAILINGMOE3 is a
-different arch) and a NON-THINKING model, at 9.9 GB the barely-fits edge case:
-(a) 12.59 tok/s / 0.86 majflt (essentially resident), (b) 8.63 tok/s — streaming LOSES
-31% and its 7.5 GiB expert cache + anon dense copy PUSHED THE MODEL INTO SWAP
-(0.86 → 19.27 majflt/tok: the cache became the memory pressure; sharpest fits-RAM
-result yet), (c) reuse native from the first follow-up, no echo, no reconcile turn;
-auto-echo a verified no-op (c3 ≈ c2 + warm decode); c4 divergence 27/34 with rs-seq
-OFF; c5 ≡ c4; warmup T1 ~10× (0.80 s) composing freely (1/31). One audit catch
-(7.7 → 7.5 GiB) fixed same session. Session-8 (Laguna non-hybrid find) in history.
-Queue: Qwen3-30B next.*## State delta (this session)
+*Resume last rewritten: 2026-09-19 (session 10, upstream track). Phase: host bench
+campaign paused mid-queue — five models published, Qwen3-30B next; this session went
+upstream to finalize PR #29085.*
+*One-line status: #29085 is now template-compliant and re-verified at master tip
+(`f072b1037`); body rewritten onto the ggml template (via REST PATCH — `gh pr edit`
+is broken on ggml-org by the Projects-classic GraphQL deprecation), PR intentionally
+left DRAFT (user decision) — the ready-flip is the user's action. Re-verification
+surfaced a NEW pre-existing upstream finding: on CPU, a real LFM2.5 model FAILS the
+rollback suite's multi-seq split-replay subtest (max diff 11.587, deterministic)
+identically with and without the fix, while dummy fixtures pass and single-seq restore
+succeeds — our engine's single-seq usage unaffected. The 17 upstream commits since the
+PR cut: none touch the reserve path; the one relevant one (`efa28e950`, fixture-
+generator vocab change) is what the PR's new test rows depend on — verified passing at
+tip. Queue: Qwen3-30B next (bench track).*## State delta (this session)
 
-- **Arc pushed at session start (user request):** `8958e88..b7f3cd0`; the session-9
-  wrap-up commit below is the only local commit again.
-- **Ling-mini-2.0 full batch (`8104b26`, fix `8605806`) — second plain transformer,
-  barely-fits edge case:** arch `bailingmoe2` (no hybrid/recurrent listing; the
-  rollback list's BAILINGMOE3 is a different arch) and non-thinking (no reasoning
-  span in replies). 9.9 GB on 11 GB RAM: (a) 12.59 tok/s, load 21.3 s, prefill 2.26 s,
-  0.86 majflt/tok (essentially resident); (b) 8.63 tok/s (−31%), prefill 12.75 s
-  (5.6×), 19.27 majflt/tok — the streaming stack's 7.5 GiB cache + anon dense copy
-  pushed the model into swap: the cache BECAME the memory pressure (sharpest fits-RAM
-  result yet, headline of the recommendations); (c) reuse native from the first
-  follow-up (c1 T2 already 27/34) with no echo and no reconcile turn; `--auto-echo`
-  a verified no-op (c3 ≈ c2, decode gains from warm cache only); (c4) divergence 27/34
-  with rs-seq OFF (free chop); (c5) ≡ c4 (pool unused — same classification
-  confirmation as Laguna); warmup T1 ~10× (0.80 s) composing freely (1 fresh / 31).
-  c4's T1 prefill (34.4 s at 1.0 tok/s) noted in-doc as the cold-load outlier row.
-- **MAXTOK for Ling-mini:** 192 suffices (non-thinking model, no reasoning span);
-  c-suite ran in one tmux loop, all five cells inside ~5 min.
-- **Audit catch this session:** cache 7686.8 MiB is 7.5 GiB, not 7.7 (fixed `8605806`).
-- **Watched PRs (this session):** not re-checked; last verified OPEN in session 6.
-- **Session 8 record (arc push, Laguna non-hybrid find, MAXTOK 384 ladder, MTP-carrier
-  audit fix):** in the session-8 history entry below.
+- **#29085 body rewritten onto the ggml template** (`## Overview` / `## Additional
+  information` / `## Requirements`; user's own Overview sentence + AI disclosure kept
+  verbatim; "Ran CI locally" box stays unchecked — user's call). Applied via
+  `gh api -X PATCH repos/ggml-org/llama.cpp/pulls/29085 -F body=@/tmp/pr-29085-body.md`
+  after `gh pr edit` died on the Projects-classic GraphQL deprecation (gh bug, not ours).
+  The template text the user had posted as a COMMENT (09-18 20:23) never satisfied the
+  bot — the checker reads the body only; now the body carries it.
+- **17-commit drift audit (user asked to summarize + check overlap):** 12 backend-op
+  commits (hexagon/metal/opencl/cuda), 4 server/chat/json-schema, and exactly one
+  touching what the PR depends on: `efa28e950` (test-llama-archs dummy vocab) — the
+  fixture generator behind the PR's new rows. ZERO commits touch the reserve path
+  (ggml/src + llama-context byte-identical from repro commit `4fea119de` to tip).
+  Branch still exactly 1 commit (`74e1ee6de`), MERGEABLE, no rebase needed — nothing
+  to move; upstream's work is upstream's.
+- **Re-verified at tip** (lean CPU build in `/tmp/lp-verify`): with the patch, both new
+  dummy fixtures PASS the rollback suite; real LFM2.5-8B-A1B Q4_K_M: context creation
+  + single-seq rollback succeed. The assert does NOT fire at tip in this config even
+  without the fix — the 368-byte razor-edge shortfall manifests config-dependently
+  (assert on the original repro build, clean pass here); the fix is behaviorally
+  inert here (base ≡ fixed outputs), consistent with a capacity fix; the
+  classification argument (LFM2 family belongs in the linear-attention budget bucket)
+  is unchanged.
+- **NEW upstream finding (out of #29085 scope):** real-model CPU rollback FAILS the
+  multi-seq split-replay subtest — max diff 11.587 at seq 0 pos 16, deterministic,
+  IDENTICAL with and without the fix; dummies pass (1.2e-10 / 0); single-seq
+  "checkpoint restored successfully". Pre-existing: zero CPU-path commits since the
+  repro commit; first seen today because the real model never got past context
+  creation on CPU before. Our engine unaffected — rollback usage is single-seq (c5
+  verified). Test source confirms mismatch ⇒ `return false` (eps 1e-7); the earlier
+  exit=0 readings were pipeline artifacts (the `$?` trap).
+- **User decisions recorded:** body only, PR stays draft (ready-flip is theirs);
+  mismatch = track in PROGRESS, narrow the repro before any upstream report.
 
 ## Artifacts touched (this session)
 
 | File | What |
 |---|---|
-| `scripts/host-bench-ling-c1c5.patch` | the Ling-mini rows + summary/README fold-in diff published as 8104b26 |
-| `scripts/host-bench-ling-fix1.patch` | the cache-size fix published as 8605806 (7686.8 MiB = 7.5 GiB) |
-| `PROGRESS.md` | this rewrite + the session-9 history entry |
-| `cjl4hd:main` `8104b26` + `8605806` | published: Ling-mini section, summary/recommendations updates, README perf column |
-| `.bench-report/Ling-mini-a-baseline.{csv,log}` | Ling-mini cell (a) raw evidence; bench-report's own CSV covers cell (b) |
+| `/tmp/pr-29085-body.md` | the exact body now on #29085 (source of truth for future edits) |
+| `/tmp/lp-verify/` | llama.cpp verify worktree at tip `f072b1037` + lean build (`build-tmp/`), PR patch APPLIED uncommitted, fixtures in `build-tmp/test-models/` — KEEP for the mismatch repro work; regen commands in the session-10 history entry |
+| `PROGRESS.md` | this rewrite + the session-10 history entry |
 
-Evidence (ephemeral, regenerable by rerunning the cells): `/tmp/bench-ling/server-c{1..5}.log`,
-`/tmp/bench-ling/c{1..5}/` (per-turn t*/r* JSON); earlier sessions' `/tmp/bench-{cyber,lfm25,laguna}/`
-trees likewise still on disk.
+No bmoe-repo code changes this session; `session.cpp` pos0 port untouched
+(working-tree-only, never commit). Evidence is ephemeral (worktree + body file); the
+history entry records the full regen commands.
 
 Arc state: `feat/session-residency` == `fork/feat/session-residency` at `b7f3cd0`
-(pushed this session); this wrap-up commit goes on top locally per the session-5
-convention. The `core/src/engine/session.cpp` pos0 port stays working-tree-only —
-NEVER commit it (the pin still has `n_past` and would not build); stash it for pin
-builds and the ctest gate. Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp
-(what `build-bench/` links); `fix/rs-rollback-index-shift` upstream, PR #29117 closed
-until #29085 merges.
+(this session added no bmoe commits; the wrap-up commit below goes on top locally per
+the session-5 convention — push is yours). The `core/src/engine/session.cpp` pos0 port
+stays working-tree-only — NEVER commit it (the pin still has `n_past` and would not
+build); stash it for pin builds and the ctest gate. Engine-side branches:
+`bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` links); `fix/lfm2-rs-reserve`
+@ `74e1ee6de` = the #29085 branch (1 commit, MERGEABLE); `fix/rs-rollback-index-shift`
+upstream, PR #29117 closed until #29085 merges.
 
 ## Environment state
 
@@ -85,9 +94,14 @@ until #29085 merges.
   as `cjl4hd`. Submodule: `Helldez/llama.cpp` @ `0e8c83e51` (one sanctioned expert-hook
   commit on upstream).
 - **llama.cpp work area**: `~/git/llama.cpp` — fork `cjl4hd/llama.cpp` (origin),
-  `upstream` = ggml-org, `helldez` = pin archaeology. Release build with fixture models;
-  regenerate via `cmake --build build -j4 --target test-llama-archs &&
-  ./build/bin/test-llama-archs -o build/tests/test-models/`.
+  `upstream` = ggml-org, `helldez` = pin archaeology. Clone rests on `bench/host-rs`
+  (the bench stack build-bench links); the #29085 branch is `fix/lfm2-rs-reserve` @
+  `74e1ee6de`; the tip verify worktree lives at `/tmp/lp-verify` (see Artifacts).
+  Release build with fixture models; regenerate via `cmake --build build -j4 --target
+  test-llama-archs && ./build/bin/test-llama-archs -o build/tests/test-models/`.
+- **gh CLI caveat (ggml-org)**: `gh pr edit/view` dies on the Projects-classic GraphQL
+  deprecation — use REST: `gh api repos/ggml-org/llama.cpp/pulls/29085 --jq ...`;
+  body edits via `-X PATCH ... -F body=@file`.
 - **aider scratch repo**: `~/aider-test` (planted `a - b` bug in `calculator.py`).
 - Untracked, NOT ours: `.opencode/`, `bmoe-arm64*`, `opencode.json`, `.aider*`, logs.
 - Ephemeral: `/tmp/bmoe-serve.log`, `/tmp/bmoe-reqs.jsonl` (only when `BMOE_DEBUG_ECHO=1`),
@@ -100,18 +114,39 @@ until #29085 merges.
    fork main → rebase `feat/session-residency` (serve-bridge commits collapse) →
    `gh pr create --repo Helldez/BigMoeOnEdge --base main --head cjl4hd:feat/session-residency`.
    Fallback if #197 stalls: fork-internal PR (`--repo cjl4hd --base feat/serve-bridge-arm64`), retarget later.
-2. **PR #29085 (reserve fix) awaits upstream CI/review** (checked this session: OPEN,
-   REVIEW_REQUIRED). When merged it reaches this dependency only via a submodule bump —
-   re-run the byte-identity gates after the bump (ADR-001's bump rule), and re-run
-   `bmoe-rsbench reserve` on the new pin (the backtrace site differs pin↔master).
-3. **Shape-dependent-backend caveat for any future bitwise claim:** any exactness
+2. **PR #29085 — submission-ready, awaiting the user's ready-flip** (body
+   template-compliant as of this session; still a DRAFT by user choice; commit clean,
+   MERGEABLE, no rebase needed). `gh pr ready 29085 --repo ggml-org/llama.cpp` → full
+   CI + bot re-scan. After merge: reopen PR #29117 (humanize description first —
+   `/tmp/pr-index-shift-description-draft.md` is the tool draft, a starting point
+   only), then submodule bump + full byte-identity gates + `bmoe-rsbench reserve`
+   re-run (ADR-001 bump rule; the backtrace site differs pin↔master). If a reviewer
+   can't reproduce the assert on current master: the shortfall manifests
+   config-dependently at tip (see state delta) — the durable argument is the
+   classification fix + the new fixture coverage.
+3. **NEW — CPU multi-seq split-replay mismatch (real LFM2.5, max diff 11.587):**
+   pre-existing, out of #29085 scope, our single-seq engine paths unaffected. Next:
+   narrow the repro (other real allowlist archs on CPU? a non-lean build? dummy-only
+   CI can't catch it), then decide on an upstream issue. Evidence + commands in the
+   session-10 history entry.
+4. **Shape-dependent-backend caveat for any future bitwise claim:** any exactness
    comparison against a differently-shaped reference is meaningless here (~3 logits of
    noise from ubatch splits alone, MoE routing flips). Only identical-shape controls
    (d=0) or argmax-level verdicts with shape-control rows are admissible evidence.
 
 ## Next actions (ordered)
 
-1. **Continue the bench batch — Qwen3-30B-A3B next** (Ling-mini done), then
+1. **User: flip #29085 to ready for review** (`gh pr ready 29085 --repo
+   ggml-org/llama.cpp`) → full CI + bot re-scan; both flags should clear. Further body
+   edits: REST PATCH from `/tmp/pr-29085-body.md` (gh pr edit is broken — see
+   Environment).
+2. **Narrow the CPU multi-seq mismatch** (commands in the session-10 history entry):
+   rerun `test-recurrent-state-rollback` on the other real allowlist models on hand
+   (Qwen3.5-9B first — 35B/30B loads are slow on CPU), and once on a non-lean build,
+   to bound arch-specificity vs config; then draft the upstream issue (user-owned
+   wording) if it holds. `/tmp/lp-verify` is the ready-made runner (patch applied).
+   When done: remove the worktree (`git worktree remove --force /tmp/lp-verify`).
+3. **Continue the bench batch — Qwen3-30B-A3B next** (Ling-mini done), then
    Qwen3.6-35B, olmoe. Per model: (a) direct pin-build CLI run — NOT
    `bench-report.sh`, which hardcodes the streaming stack and is cell (b) — same
    protocol minus the streaming flags; (b) `scripts/bench-report.sh`; (c1–c3)
@@ -124,26 +159,22 @@ until #29085 merges.
    Summary/Conclusions/Recommendations and the README perf column. **Audit rule
    (five catches now):** every number, ratio, and unit conversion (MiB→GiB!) from
    the run's own CSV/log — never from memory. Dense models skipped per user.
-2. **Check watched PRs** (`gh pr view 29085 --repo ggml-org/llama.cpp` and #197 on
-   Helldez/BigMoeOnEdge): last verified OPEN in session 6 — three sessions stale.
-   When #29085 merges: reopen PR #29117 (`gh pr reopen 29117 --repo ggml-org/llama.cpp`,
-   fall back to re-creating from branch `fix/rs-rollback-index-shift`), humanize its
-   description first (`/tmp/pr-index-shift-description-draft.md` is the tool draft — a
-   starting point only), then ready-for-review. Flag in the PR: `seq_rm` now returns
-   false where it used to return true; callers that ignore it fall back to re-prefill.
-   Watch item: #28976 (WebGPU GDN kernel) must keep the snapshot-slot contract. When
-   #197 merges: execute the stacked-PR plan (Open questions 1); submodule bump + full
-   gates when #29085 lands in a pin bump.
-3. **After the batch: refresh the evidence tables** — `docs/benchmarks.md`/`docs/serve.md`
+4. **Watched PRs** — when #29085 merges: reopen PR #29117 (`gh pr reopen 29117 --repo
+   ggml-org/llama.cpp`, fall back to re-creating from branch
+   `fix/rs-rollback-index-shift`), humanize its description first
+   (`/tmp/pr-index-shift-description-draft.md` — tool draft, starting point only),
+   then ready-for-review. Flag in the PR: `seq_rm` now returns false where it used to
+   return true; callers that ignore it fall back to re-prefill. Watch item: #28976
+   (WebGPU GDN kernel) must keep the snapshot-slot contract. When #197 merges: the
+   stacked-PR plan (Open questions 1); submodule bump + full gates on a #29085 pin
+   bump; plan the `--rs-seq` flip + hybrid-residency un-exclusion once a release
+   carries the fix.
+5. **After the batch: refresh the evidence tables** — `docs/benchmarks.md`/`docs/serve.md`
    gain host rows; the README in-flight table's perf column gets second/third points.
-4. **Watch #29085 and #197** (`gh pr view 29085 --repo ggml-org/llama.cpp`); execute the
-   stacked-PR plan when #197 merges; submodule bump + full gates when #29085 merges;
-   plan the `--rs-seq` flip + hybrid-residency un-exclusion once a release carries the fix.
-5. **Measure Ling-mini edit-turn reuse** with captured aider payloads; **opencode
-   re-test** with `--auto-echo` on LFM2.5. Daily driver back on :8017 when benching ends.
-6. **Every wrap-up: refresh the README feature tables** on `fork/main` (In-flight
-   features + Forks; rule 6 lives there) — add/remove rows when branches merge or
-   fork divergence changes.
+6. **Measure Ling-mini edit-turn reuse** with captured aider payloads; **opencode
+   re-test** with `--auto-echo` on LFM2.5. Daily driver back on :8017 when benching
+   ends. **Every wrap-up: refresh the README feature tables** on `fork/main`
+   (In-flight features + Forks; rule 6 lives there).
 
 ## Resume gates (all must assert positives)
 
@@ -163,9 +194,11 @@ until #29085 merges.
 5. `test -x build/tools/bmoe-rsbench` → exists (`-DBMOE_BUILD_TOOLS=ON`); and
    `./build/tools/bmoe-rsbench reserve <lfm2 gguf>` → exit 134 on the unfixed pin
    (flips to 0 after the #29085 bump).
-6. `cd ~/git/llama.cpp && git branch --show-current` → `fix/rs-rollback-index-shift`,
-   clean tree, in sync with origin; re-verify cutsweep with `/tmp/bmoe-rsbench-clone
-   cutsweep <lfm2 gguf>` → 9/9 EXACT (rebuild runner + clone llama if the branch moved).
+6. `cd ~/git/llama.cpp && git branch --show-current` → `bench/host-rs` (the clone's
+   resting branch; build-bench links it) and `git rev-parse --short fix/lfm2-rs-reserve`
+   → `74e1ee6de` (the submitted #29085 commit). Cutsweep re-verify (when the index-shift
+   work resumes): `/tmp/bmoe-rsbench-clone cutsweep <lfm2 gguf>` → 9/9 EXACT (rebuild
+   runner + clone llama if moved; /tmp is volatile).
 7. Server gate (only when a serve/agents session needs it): restore per Environment
    state, then `curl -fsS -m 3 http://127.0.0.1:8017/v1/models` → the `bmoe-local` JSON.
 
@@ -784,3 +817,55 @@ results re-derived from on-disk logs, answers 42/52/62 verified everywhere.
 **State:** no stray listeners/processes/tmux; user's tmux session untouched; warmup
 cache holds the Ling-mini chain; arc synced at b7f3cd0 (wrap-up commit local on top);
 `fork/main` doc chain through 8605806. Queue head: Qwen3-30B-A3B.
+
+**Session 10 (2026-09-19, late) — upstream: #29085 finalization pass.** Trigger:
+"lets go back to pr 29085, and review whats needed for a clean submission."
+
+- **Bot flags vs reality:** the 09-18 bot flagged (1) template-not-respected and (2)
+  AI-generated content. The template text had been posted as a COMMENT (20:23) with
+  the AI disclosure in the user's own words — comments don't satisfy the checker
+  (body-only). Commit `74e1ee6de` clean (author cjl4hd, no AI trailers); PR still a
+  DRAFT so full CI never ran.
+- **Drift audit (user: summarize the 17, check overlap, merge?):** the 17 are
+  upstream's own work — nothing to move. Only `efa28e950` (test-llama-archs dummy
+  vocab) touches what the PR depends on (its new rollback rows' fixture generator).
+  Zero commits touch the reserve path (ggml/src + llama-context byte-identical from
+  `4fea119de` to tip). Branch stays 1 commit, MERGEABLE — no merge/rebase needed.
+- **Tip re-verification** (`/tmp/lp-verify`, lean CPU build):
+  ```bash
+  git worktree add --detach /tmp/lp-verify upstream/master
+  cmake -S /tmp/lp-verify -B /tmp/lp-verify/build-tmp -DGGML_CUDA=OFF \
+    -DGGML_VULKAN=OFF -DLLAMA_CURL=OFF -DLLAMA_BUILD_TOOLS=OFF -DGGML_OPENMP=OFF \
+    -DCMAKE_BUILD_TYPE=Release
+  cmake --build /tmp/lp-verify/build-tmp -j4 --target test-llama-archs \
+    test-recurrent-state-rollback
+  /tmp/lp-verify/build-tmp/bin/test-llama-archs -o /tmp/lp-verify/build-tmp/test-models/
+  # BASE (no fix): dummy lfm2 rollback PASSES; real LFM2.5 Q4_K_M: creation +
+  # single-seq rollback OK — the assert does NOT fire at tip in this config.
+  git show 74e1ee6de -- src/llama-context.cpp tests/CMakeLists.txt | git apply
+  cmake --build /tmp/lp-verify/build-tmp -j4 --target test-recurrent-state-rollback
+  # FIXED: dummy lfm2 + lfm2moe PASS; real model identical to base.
+  ```
+  Verdict: the fix is behaviorally inert in this config (base ≡ fixed) — the 368-byte
+  razor-edge shortfall manifests config-dependently (assert on the original repro
+  build, clean pass here); the classification argument stands.
+- **NEW upstream finding — CPU multi-seq split-replay mismatch (real LFM2.5,
+  11.587):** base and fixed identically FAIL `test_multi_seq_split_replay` on the real
+  model (max diff 11.587, first at seq 0 pos 16, deterministic); dummies match
+  (1.2e-10 / 0); single-seq `test_rollback` restores successfully. Test source:
+  mismatch ⇒ `return false` (eps 1e-7) — earlier exit=0 readings were pipeline
+  artifacts (`$?` trap). Pre-existing (no CPU-path commits since `4fea119de`); first
+  seen today because the real model never got past context creation on CPU before.
+  Our engine unaffected (single-seq rollback usage; c5 verified). User decision:
+  track here, narrow the repro before any upstream report; NOT in #29085.
+- **PR body rewritten onto the template:** Overview / Additional information /
+  Requirements (user's Overview sentence + AI disclosure kept; re-verification
+  results + the out-of-scope mismatch noted; "Ran CI locally" unchecked — user's
+  call). `gh pr edit` broken on ggml-org (Projects-classic GraphQL deprecation) —
+  applied via `gh api -X PATCH repos/ggml-org/llama.cpp/pulls/29085 -F
+  body=@/tmp/pr-29085-body.md`, verified landed. PR left DRAFT (user decision).
+
+**State:** no bmoe-repo code changes; `session.cpp` pos0 port untouched; arc `b7f3cd0`
+(+ wrap-up local); #29085 template-compliant + draft; verify worktree kept at
+`/tmp/lp-verify` (patch applied, regenerable — commands above); queue head
+Qwen3-30B-A3B (bench track unpauses next session).
