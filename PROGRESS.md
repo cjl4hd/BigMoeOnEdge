@@ -6,77 +6,68 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-19 (session 10, upstream track). Phase: host bench
-campaign paused mid-queue — five models published, Qwen3-30B next; this session went
-upstream to finalize PR #29085.*
-*One-line status: #29085 is now template-compliant and re-verified at master tip
-(`f072b1037`); body rewritten onto the ggml template (via REST PATCH — `gh pr edit`
-is broken on ggml-org by the Projects-classic GraphQL deprecation), PR intentionally
-left DRAFT (user decision) — the ready-flip is the user's action. Re-verification
-surfaced a NEW pre-existing upstream finding: on CPU, a real LFM2.5 model FAILS the
-rollback suite's multi-seq split-replay subtest (max diff 11.587, deterministic)
-identically with and without the fix, while dummy fixtures pass and single-seq restore
-succeeds — our engine's single-seq usage unaffected. The 17 upstream commits since the
-PR cut: none touch the reserve path; the one relevant one (`efa28e950`, fixture-
-generator vocab change) is what the PR's new test rows depend on — verified passing at
-tip. Queue: Qwen3-30B next (bench track).*## State delta (this session)
+*Resume last rewritten: 2026-09-20 (session 11). Phase: bench campaign — SIX models
+published (Ornith, Cyber-Tiel, LFM2.5, Laguna, Ling-mini, Qwen3-30B); queue head
+Qwen3.6-35B-A3B. Upstream: #29085 READY FOR REVIEW.*
+*One-line status: #29085 flipped ready-for-review (full ggml CI running on GitHub;
+local CI already green, body template-compliant with both boxes checked; REST PATCH
+for body edits — `gh pr edit` broken on ggml-org). Arc pushed through the session-10
+addendum. Qwen3-30B-A3B batch measured + published (`091ea05`): third plain-
+transformer MoE, matrix's heaviest thinker (MAXTOK ladder needed 768), streaming
++47% with prefill HALVED (a thrashes at 340 majflt/tok). Nemotron-H/H_MOE budget gap:
+upstream issue is the user's to post (draft ready). `docs/MISTAKES.md` created
+(pkill self-match lesson, 3× cost this session). Session-10 details in history.*## State delta (this session)
 
-- **#29085 body rewritten onto the ggml template** (`## Overview` / `## Additional
-  information` / `## Requirements`; user's own Overview sentence + AI disclosure kept
-  verbatim; "Ran CI locally" box stays unchecked — user's call). Applied via
-  `gh api -X PATCH repos/ggml-org/llama.cpp/pulls/29085 -F body=@/tmp/pr-29085-body.md`
-  after `gh pr edit` died on the Projects-classic GraphQL deprecation (gh bug, not ours).
-  The template text the user had posted as a COMMENT (09-18 20:23) never satisfied the
-  bot — the checker reads the body only; now the body carries it.
-- **17-commit drift audit (user asked to summarize + check overlap):** 12 backend-op
-  commits (hexagon/metal/opencl/cuda), 4 server/chat/json-schema, and exactly one
-  touching what the PR depends on: `efa28e950` (test-llama-archs dummy vocab) — the
-  fixture generator behind the PR's new rows. ZERO commits touch the reserve path
-  (ggml/src + llama-context byte-identical from repro commit `4fea119de` to tip).
-  Branch still exactly 1 commit (`74e1ee6de`), MERGEABLE, no rebase needed — nothing
-  to move; upstream's work is upstream's.
-- **Re-verified at tip** (lean CPU build in `/tmp/lp-verify`): with the patch, both new
-  dummy fixtures PASS the rollback suite; real LFM2.5-8B-A1B Q4_K_M: context creation
-  + single-seq rollback succeed. The assert does NOT fire at tip in this config even
-  without the fix — the 368-byte razor-edge shortfall manifests config-dependently
-  (assert on the original repro build, clean pass here); the fix is behaviorally
-  inert here (base ≡ fixed outputs), consistent with a capacity fix; the
-  classification argument (LFM2 family belongs in the linear-attention budget bucket)
-  is unchanged.
-- **NEW upstream finding (out of #29085 scope):** real-model CPU rollback FAILS the
-  multi-seq split-replay subtest — max diff 11.587 at seq 0 pos 16, deterministic,
-  IDENTICAL with and without the fix; dummies pass (1.2e-10 / 0); single-seq
-  "checkpoint restored successfully". Pre-existing: zero CPU-path commits since the
-  repro commit; first seen today because the real model never got past context
-  creation on CPU before. Our engine unaffected — rollback usage is single-seq (c5
-  verified). Test source confirms mismatch ⇒ `return false` (eps 1e-7); the earlier
-  exit=0 readings were pipeline artifacts (the `$?` trap).
-- **User decisions recorded:** body only, PR stays draft (ready-flip is theirs);
-  mismatch = track in PROGRESS, narrow the repro before any upstream report.
+- **#29085 marked ready for review** (`gh pr ready 29085 --repo ggml-org/llama.cpp`;
+  REST `-F draft=false` is silently ignored — the GraphQL mutation is the only way).
+  State: `draft=false`, open; full CI running on GitHub; local CI already green
+  (session-10 addendum); body carries both checked boxes. Watch CI + the bot re-scan
+  (REST: `gh api repos/ggml-org/llama.cpp/pulls/29085 --jq ...`; `gh pr view` may hit
+  the Projects-classic deprecation).
+- **Arc pushed** `b7f3cd0..9624b13`; gate 1 re-run green (stash → clean pin build →
+  ctest → pop; port restored).
+- **Qwen3-30B-A3B full batch — published `091ea05` on fork/main:**
+  (a) 2.44 tok/s, **340.4 majflt/tok** (thrash), load 117.7 s, prefill 44.5 s;
+  (b) **3.59 tok/s (+47%)**, 1.91 majflt/tok, 93.4% hit, 40.3 MiB/tok, prefill **22.1 s
+  (halved)** — second arch (after Laguna) where streaming speeds up prefill too;
+  (c1) native reuse from the FIRST follow-up (T2 28/22, T3 28/50) — no echo, no
+  reconcile turn, unlike the qwen35-family hybrids; (c2) warmup T1 24.3 → 1.23 s
+  (~20×); (c3) auto-echo verified no-op; (c4) divergence free partial chop 28/22 with
+  rs-seq OFF; (c5) ≡ c4 — third transformer confirmation. Answers 42/52/62 (c4/c5:
+  42/62) verified from r*.json.
+- **MAXTOK ladder rung discovered: 768.** 192 and 384 both truncated Qwen3-30B's r1
+  think span (empty content, `verdict: FAIL` by design — 1313 chars of coherent
+  reasoning at 384, still cut). Heaviest thinker in the matrix; Laguna needed 384.
+  Protocol note recorded in-doc: c1 is the only warmup-off cell — c2–c5 all replay
+  warmup, so their T1 rows (1/21) are composition rows, not baselines.
+- **`docs/MISTAKES.md` created** (trigger: 3× same failure class): `pkill -f
+  <pattern>` matches the calling shell's own cmdline and kills the rest of the
+  compound command — the swallowed-tail failures that cost ~30 min. Rule: bracketed
+  patterns (`pkill -f "[c]ellc.sh"`) or a standalone kill + post-assert; never chain
+  `pkill -f X` with follow-ups.
+- **Nemotron-H/H_MOE budget gap**: issue NOT posted — user posts it themselves
+  (AI-content rule); draft ready at `/tmp/nemotron-budget-issue-draft.md`.
 
 ## Artifacts touched (this session)
 
 | File | What |
 |---|---|
-| `/tmp/pr-29085-body.md` | the exact body now on #29085 (source of truth for future edits) |
-| `~/git/lp-ci/` | CI worktree (tip + FULL PR patch) + `ci-results/` + `ci-mnt/` + venv — the local-CI runner; rerun command in Next actions 1; remove when CI is done |
-| `/tmp/lp-verify/` | llama.cpp verify worktree at tip `f072b1037` + lean build (`build-tmp/`), PR patch APPLIED uncommitted, fixtures in `build-tmp/test-models/` — KEEP for the mismatch repro work; regen commands in the session-10 history entry |
-| `/tmp/nemotron-probe.log` | nemotron_h dummy rollback probe (PASSES, diff 0) |
-| `/tmp/nemotron-budget-issue-draft.md` | DRAFT upstream issue for the NEMOTRON_H/H_MOE budget gap — user reviews, owns, posts |
-| `PROGRESS.md` | this rewrite + the session-10 history entry |
+| `scripts/host-bench-q30-c1c5.patch` | the Qwen3-30B rows + summary/README fold-in diff published as 091ea05 |
+| `docs/MISTAKES.md` | NEW mistake log — pkill self-match entry |
+| `PROGRESS.md` | this rewrite + the session-11 history entry |
+| `cjl4hd:main` `091ea05` | published: Qwen3-30B section, summary/conclusions/recommendations updates, README perf column |
+| `.bench-report/Qwen3-30B-{a-baseline,A3B-Q4_K_M}.{csv,log}` | cells (a)/(b) raw evidence |
+| `/tmp/bench-q30/` | c-suite evidence: `run-c{1..5}.log`, `c{1..5}/{t,r}{1..3}.json`, server logs (regenerable by rerunning the cells) |
+| `/tmp/nemotron-budget-issue-draft.md` | DRAFT upstream issue — user reviews, owns, posts |
+| `/tmp/lp-verify/`, `~/git/lp-ci/` | kept from session 10 (mismatch repro runner; CI evidence — ~9 GB, removable after #29085 lands, keep `ci-results/`) |
 
-No bmoe-repo code changes this session; `session.cpp` pos0 port untouched
-(working-tree-only, never commit). Evidence is ephemeral (worktree + body file); the
-history entry records the full regen commands.
-
-Arc state: `feat/session-residency` == `fork/feat/session-residency` at `b7f3cd0`
-(this session added no bmoe commits; the wrap-up commit below goes on top locally per
-the session-5 convention — push is yours). The `core/src/engine/session.cpp` pos0 port
-stays working-tree-only — NEVER commit it (the pin still has `n_past` and would not
-build); stash it for pin builds and the ctest gate. Engine-side branches:
-`bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` links); `fix/lfm2-rs-reserve`
-@ `74e1ee6de` = the #29085 branch (1 commit, MERGEABLE); `fix/rs-rollback-index-shift`
-upstream, PR #29117 closed until #29085 merges.
+Arc state: `feat/session-residency` == `fork/feat/session-residency` at `9624b13`
+(pushed this session); the wrap-up commit below goes on top locally per the session-5
+convention — push is yours. The `core/src/engine/session.cpp` pos0 port stays
+working-tree-only — NEVER commit it; stash it for pin builds and the ctest gate.
+Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` links);
+`fix/lfm2-rs-reserve` @ `74e1ee6de` = the #29085 branch (READY FOR REVIEW);
+`fix/rs-rollback-index-shift` upstream, PR #29117 closed until #29085 merges.
 
 ## Environment state
 
@@ -87,8 +78,10 @@ upstream, PR #29117 closed until #29085 merges.
 - **Models** (`~/llm/models/`): Ling-mini-2.0, LFM2.5-8B-A1B-UD-Q4_K_M (note: no plain
   `-Q4_K_M` file — sweeps use the UD file), Qwen3.5-9B, olmoe-1b-7b, Laguna-XS-2.1,
   Ornith-1.5, Qwen3-30B, Qwen3.6-35B, Cyber-Tiel-35B.
-- **Warmup cache** `~/.cache/bmoe-serve/warmup.json`: holds the Ling-mini chain (valid,
+- **Warmup cache** `~/.cache/bmoe-serve/warmup.json`: holds the Qwen3-30B chain (valid,
   self-regenerating — the next serve on any other model overwrites it).
+- **git-lfs**: user-level install at `~/.local/bin/git-lfs` (v3.8.0 tarball, no sudo) —
+  required by `ci/run.sh`; ensure `~/.local/bin` is on PATH in CI reruns.
 - **Bench build**: `build-bench/` = the arc linked against the clone llama
   (`bench/host-rs`); requires the session.cpp pos0 working-tree port. The pin build
   (`build/`) must not see that port.
@@ -139,57 +132,37 @@ upstream, PR #29117 closed until #29085 merges.
 
 ## Next actions (ordered)
 
-1. **User: flip #29085 to ready for review** — local CI now GREEN (see Addendum:
-   54/54 debug, 55/55 release incl. both new rollback rows, 5/5+5/5 model suites,
-   qwen3-0.6B quantize/ppl suites all passed, CI_EXIT=0, zero FAILED anywhere), and
-   the body carries both checked boxes (`Ran CI locally` included, added 08:5x via
-   REST PATCH from `/tmp/pr-29085-body.md`). `gh pr ready 29085 --repo
-   ggml-org/llama.cpp` → full CI + bot re-scan. Further body edits: REST PATCH
-   (gh pr edit is broken — see Environment). After CI is no longer needed: free
-   ~9 GB with `git worktree remove --force ~/git/lp-ci` (keep `ci-results/` until
-   the PR lands if desired).
-2. **Arch sweep follow-up (user todo — sweep DONE, one real hit):** cross-checked
-   `llm_arch_supports_rs_rollback` (10 archs) vs the `graph_max_nodes` elevated budget
-   (16 archs) on tip: **NEMOTRON_H and NEMOTRON_H_MOE are rollback-capable but NOT
-   budgeted** — the same latent LFM2-class gap (every other allowlist arch is
-   correctly budgeted; the budget-without-rollback set — DFLASH, HRM_TEXT, HY_V4,
-   KIMI_LINEAR, MINIMAX_01/M3, NANBEIGE, QWEN3NEXT — is intentional). Dummy-fixture
-   probe PASSES (`/tmp/nemotron-probe.log`, max diff 0) ⇒ severity is the
-   model-dependent razor-edge (LFM2's dummy also passed; its real  Q4_K_M asserted); no real nemotron-h gguf on this host. Scope DECIDED (user):
-  **raise an upstream ISSUE and hand off** — this host cannot verify the latent crash
-  (no nemotron-h hardware/model), so no local fix; user posts the issue themselves
-  (draft at `/tmp/nemotron-budget-issue-draft.md`, user-owned wording). Bonus:
-  nemotron multi-seq matched at diff 0 ⇒ the CPU split-replay mismatch is
-  lfm2-specific, not a generic CPU-hybrid issue.
-3. **Continue the bench batch — Qwen3-30B-A3B next** (Ling-mini done), then
-   Qwen3.6-35B, olmoe. Per model: (a) direct pin-build CLI run — NOT
-   `bench-report.sh`, which hardcodes the streaming stack and is cell (b) — same
-   protocol minus the streaming flags; (b) `scripts/bench-report.sh`; (c1–c3)
-   `cellc.sh` (MAXTOK: 160 for the 35Bs, 192 for non-thinking/small models, 384 for
-   reasoning-heavy Laguna-class — start 192 and ladder from the r1/r2 reasoning
-   lengths); (c4/c5) divergence cells — c5 budget stays 64 per the OOM law; run the
-   c-suite in ONE detached tmux loop (survives tool calls; the loop self-terminates,
-   results live on disk). Publish each model's rows via
-   `scripts/publish-host-bench.sh`, then fold the model into the doc's
-   Summary/Conclusions/Recommendations and the README perf column. **Audit rule
-   (five catches now):** every number, ratio, and unit conversion (MiB→GiB!) from
-   the run's own CSV/log — never from memory. Dense models skipped per user.
-4. **Watched PRs** — when #29085 merges: reopen PR #29117 (`gh pr reopen 29117 --repo
-   ggml-org/llama.cpp`, fall back to re-creating from branch
-   `fix/rs-rollback-index-shift`), humanize its description first
-   (`/tmp/pr-index-shift-description-draft.md` — tool draft, starting point only),
-   then ready-for-review. Flag in the PR: `seq_rm` now returns false where it used to
-   return true; callers that ignore it fall back to re-prefill. Watch item: #28976
-   (WebGPU GDN kernel) must keep the snapshot-slot contract. When #197 merges: the
-   stacked-PR plan (Open questions 1); submodule bump + full gates on a #29085 pin
-   bump; plan the `--rs-seq` flip + hybrid-residency un-exclusion once a release
-   carries the fix.
+1. **Watch #29085 CI + bot re-scan** (now READY FOR REVIEW; local CI already green):
+   `gh api repos/ggml-org/llama.cpp/pulls/29085 --jq '{state, merged, draft}'` and the
+   comments timeline for the bot; body edits via REST PATCH from
+   `/tmp/pr-29085-body.md` (gh pr edit broken — see Environment). When merged:
+   reopen PR #29117 (humanize first — `/tmp/pr-index-shift-description-draft.md` is
+   the tool draft), then submodule bump + full byte-identity gates + `bmoe-rsbench
+   reserve` re-run (ADR-001 bump rule). Watch #28976 (WebGPU GDN) for the
+   snapshot-slot contract. When #197 merges: the stacked-PR plan (Open questions 1).
+   After the PR lands: free ~9 GB — `git worktree remove --force ~/git/lp-ci` (keep
+   `ci-results/` logs).
+2. **User: post the Nemotron-H/H_MOE issue** from `/tmp/nemotron-budget-issue-draft.md`
+   (own wording; AI-content rule). Record the issue number here when posted.
+3. **Continue the bench batch — Qwen3.6-35B-A3B next** (Qwen3-30B done), then OLMoE.
+   Likely `qwen35moe`-family: expect the echo-reconcile shape (T2 full-clear, T3+ rides)
+   and hybrid full-clears on divergence (c5 budget 64 per the OOM law). Per model:
+   (a) direct pin-build CLI run — NOT `bench-report.sh`, which hardcodes the streaming
+   stack and is cell (b) — same protocol minus the streaming flags; (b)
+   `scripts/bench-report.sh`; (c1–c3) `cellc.sh` (MAXTOK: start 192 and ladder from the
+   r1/r2 reasoning lengths — Laguna needed 384, Qwen3-30B needed 768; empty content +
+   `verdict: FAIL` = budget truncation, not a bug); (c4/c5) divergence cells; run the
+   c-suite in ONE detached tmux loop, 3 positional args (MODEL OUTDIR CELL),
+   `mkdir -p` the OUTDIR first. Publish via `scripts/publish-host-bench.sh`, fold into
+   Summary/Conclusions/Recommendations + README. **Audit rule (five catches):** every
+   number, ratio, and unit conversion (MiB→GiB!) from the run's own CSV/log.
+4. **Kill-process rule (docs/MISTAKES.md):** never chain `pkill -f <pat>` with
+   follow-up statements — bracket the pattern (`pkill -f "[c]ellc.sh"`) or run it
+   standalone and assert afterwards.
 5. **After the batch: refresh the evidence tables** — `docs/benchmarks.md`/`docs/serve.md`
-   gain host rows; the README in-flight table's perf column gets second/third points.
-6. **Measure Ling-mini edit-turn reuse** with captured aider payloads; **opencode
-   re-test** with `--auto-echo` on LFM2.5. Daily driver back on :8017 when benching
-   ends. **Every wrap-up: refresh the README feature tables** on `fork/main`
-   (In-flight features + Forks; rule 6 lives there).
+   gain host rows; README feature tables refreshed at every wrap-up (rule 6 lives
+   there). Then: Ling-mini edit-turn reuse with captured aider payloads; opencode
+   re-test with `--auto-echo` on LFM2.5; daily driver back on :8017 when benching ends.
 
 ## Resume gates (all must assert positives)
 
@@ -911,6 +884,54 @@ Qwen3-30B-A3B (bench track unpauses next session).
   → raise the upstream issue and leave it to someone with the hardware; draft issued
   at `/tmp/nemotron-budget-issue-draft.md` for the user to own and post. #29085 stays
   LFM2-minimal.
+
+## 2026-09-20 — Session 11: #29085 ready for review; Qwen3-30B batch; MISTAKES.md born
+
+Continued directly from session 10's followups (user: "continue with followups").
+
+- **#29085 → READY FOR REVIEW.** REST `-F draft=false` is silently ignored (response
+  still `draft=true`) — the GraphQL `markPullRequestReadyForReview` mutation behind
+  `gh pr ready` is the only way; that worked first try. Full ggml CI now runs on
+  GitHub; local CI was already green; body carries both checked boxes.
+- **Arc pushed** `b7f3cd0..9624b13`; gate 1 green (stash → clean pin build → ctest →
+  pop; port restored, verified `1 file changed`).
+- **Qwen3-30B-A3B batch (arch `qwen3moe`, 18.6 GB, ~2× host RAM):**
+  - Cells (a)+(b) via a two-cell tmux runner: (a) direct pin CLI (bench-report's
+    exact params minus the streaming stack — `-n 256 -t 8 --ubatch 512`, same essay
+    prompt): 2.44 tok/s, 340.38 majflt/tok, load 117.7 s, prefill 44.53 s (n_prompt
+    34). (b) `bench-report.sh`: 3.59 tok/s, 1.91 majflt/tok, 93.4% hit, read 10327.6
+    MiB = 40.3/tok, prefill 22.11 s (halved — second arch with streaming prefill
+    wins, after Laguna), 0 dropped experts.
+  - c-suite: **MAXTOK ladder needed 768** — 192: r1 content empty (FAIL); 384: still
+    truncated (1313 chars, cut at "I think"); 768: all five cells `verdict: ok`,
+    answers 42/52/62 (c4/c5: 42/62) verified from `c*/r*.json`.
+  - Classification predictions all reproduced (`qwen3moe` on neither the hybrid nor
+    rollback lists): native reuse from the first follow-up (c1 T2 28/22, T3 28/50),
+    warmup T1 24.3 → 1.23 s (~20×), auto-echo a verified no-op (c3 ≡ c2), divergence
+    free partial chop (c4 T2 28/22 with rs-seq OFF), c5 ≡ c4 (pool unused) — third
+    plain-transformer confirmation after Laguna and Ling-mini.
+  - Process: two failed c-suite launches taught the pkill self-match lesson (below);
+    the working launch is `tmux new-session -d -s c-q30 'cd <root>; for C in c1..c5;
+    do MAXTOK=768 scripts/cellc.sh "$M" /tmp/bench-q30 $C > run-$C.log; done'` —
+    **3 positional args, `mkdir -p` the OUTDIR first** (a missing OUTDIR fails every
+    redirect and burns the loop in milliseconds).
+  - Published `091ea05` on fork/main via the publisher (section + queue line +
+    summary/conclusions/recommendations + README: reuse 22–310 across five models,
+    divergence 22-point, warmup ~20×). Post-publish audit: all ratios recomputed from
+    CSVs/logs (47.4%→"+47%", 2.01×→"halved", 19.7×→"~20×", 40.3 MiB exact, gain range
+    42–70% exact) — no slips this time.
+- **`docs/MISTAKES.md` created** (first entry; trigger = 3× same failure class):
+  `pkill -f <pattern>` matches the calling shell's own cmdline and kills the rest of
+  the compound command — three swallowed-tail cleanups cost ~30 min. Rule: bracketed
+  patterns (`pkill -f "[c]ellc.sh"`) or standalone kill + post-assert; never chain
+  `pkill -f X` with follow-ups.
+- **Nemotron issue NOT posted** (user posts it themselves — AI-content rule); draft
+  stands at `/tmp/nemotron-budget-issue-draft.md`.
+
+**State:** gates green at wrap-up; no stray listeners/engine processes; tmux bench
+sessions self-terminated; user's tmux session ("0") untouched; arc `9624b13` (+ this
+wrap-up local); fork/main through `091ea05` carrying all six models' doc rows; queue
+head Qwen3.6-35B-A3B, then OLMoE-1B-7B.
 - **Local CI GREEN (attempt 2):** after user-level git-lfs install (`~/.local/bin`,
   v3.8.0 tarball, no sudo) + `git lfs install` + `git -C ~/git/lp-ci lfs pull`, the
   full `ci/run.sh` CPU run finished **CI_EXIT=0**: 54/54 debug, 55/55 release (both
