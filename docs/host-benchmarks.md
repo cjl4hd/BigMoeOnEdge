@@ -432,3 +432,75 @@ Reading the cells:
 
 Queued next: none — the eight-model host queue is complete; see the Summary for the
 cross-model picture.
+
+## Feature A/B: the compute/latency-hiding layer (2026-09-20)
+
+The per-model cells measure the streaming thesis; the engine's compute/latency-hiding knobs have
+their own feature docs ([mtp.md](mtp.md), [ngram.md](ngram.md),
+[cache-aware-substitution.md](cache-aware-substitution.md), [expert-dropping.md](expert-dropping.md),
+[route-ahead.md](route-ahead.md), [prefetch.md](prefetch.md),
+[expert-prediction.md](expert-prediction.md)). This section fills the gaps those docs leave: the
+exact matrix models, the exact matrix cell. All runs 256 greedy tokens, ubatch 512, bench
+binary `bench/host-rs@2a8d47ac9` (OLMoE rows: pin build — ratios only).
+
+### Cyber-Tiel-35B (21.0 GB, ~2× RAM — the miss-headroom case)
+
+| Cell | tok/s | majflt/tok | stall s/tok | vs base |
+|---|---:|---:|---:|---:|
+| base (streaming stack) | 1.884 | 21.9 | 0.180 | — |
+| `--mtp` | 1.982 | 8.8 | 0.236 | **+5.2%** |
+| `--drop-cold-experts 0.75` | 2.493 | 26.6 | 0.099 | **+32.3%** |
+| drop 0.75 + `--drop-in-prefill` | 2.203 | **158.5** | 0.105 | −11.6% vs drop alone |
+| `--expert-substitute 0.15` | **2.773** | 25.3 | **0.060** | **+47.2%** |
+
+Reading the cells:
+
+- **Substitution is the biggest single win measured on this host** (+47.2%): 18.1% of routing
+  slots reranked to already-resident experts (14788/81920 at margin 0.15× score range) turns
+  hard faults into cache hits — stall s/tok collapses 0.180 → 0.060. Lossy: per the quality-gate
+  rule, the accuracy evidence lives in the substitution doc's protocol (HumanEval50/TinyMMLU);
+  the gate was measured on Qwen3.6, so treat this cell's text as ungated until the same gate
+  runs on Cyber-Tiel.
+- **Drop 0.75 confirms its published recipe** (+32.3%): stall halved. **`--drop-in-prefill`
+  actively hurts** (−11.6% vs drop alone): dropping during prefill churns a cold cache and the
+  decode-time fault count explodes (26.6 → 158.5 majflt/tok). Keep prefill dropping off.
+- **MTP engages but the cell is I/O-bound** (+5.2%): 51.3% acceptance, 2.51 tokens per verify
+  decode — the verify loop cuts decode *steps* ~60%, but each step still streams the same
+  expert bytes, so the flash-bound cell keeps most of its cost. Speculation pays on the
+  compute-bound profile, not the thrash profile.
+
+### LFM2.5-8B (hybrid, fits RAM — the composition question)
+
+| Cell | tok/s | majflt/tok | vs base |
+|---|---:|---:|---:|
+| base | 7.566 | 0.2 | — |
+| `--ngram` | **8.143** | 18.8 | **+7.6%** |
+
+**Speculative verify composes with the recurrent-state rollback planes**: 48.5% acceptance
+(1.07 tok/verify) on a hybrid whose KV also carries rs snapshot planes — the two mechanisms
+touch disjoint state, and the +7.6% lands clean. The majflt rise (0.2 → 18.8) is cheap page-
+cache re-reading on a fits-RAM model, not thrash.
+
+### Qwen3.6-35B (deepest thrash — the never-tabled knob)
+
+| Cell | tok/s | majflt/tok | stall s/tok | vs base |
+|---|---:|---:|---:|---:|
+| base | 1.763 | 175.3 | 0.157 | — |
+| `--io-two-wave` | **2.208** | **34.6** | 0.130 | **+25.2%** |
+
+**`--io-two-wave` — the last untabled knob — delivers +25.2%** on the worst thrash cell:
+publishing a layer's first-projection reads early collapses hard faults 5.1× (175.3 → 34.6
+tok). This was listed "pending an on-device A/B" in the method doc since it shipped; on host
+flash the A/B is unambiguous.
+
+### OLMoE-1B-7B (fastest, fits RAM — protocol rows; pin build, ratios only)
+
+`--ubatch 256` −0.9%, `--ubatch 1024` −1.7% (the 512 protocol default confirmed with numbers);
+`--dense-odirect` −0.6% (neutral — dense reads barely happen post-warmup on a fits-RAM model);
+`--ngram` −4.3% on prose (5.6% draft coverage — nothing to feed on) vs **+3.3%** on a repetition
+prompt (64.5% acceptance, 1.45 tok/verify — ngram pays exactly when the prompt repeats, and the
+CPU verify cost caps it on a small model).
+
+See [benchmark-method.md](benchmark-method.md) §"Feature A/B coverage" for the full
+model×knob pairing and provenance (our implementation vs mainline-derived).
+

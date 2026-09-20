@@ -273,11 +273,14 @@ Unmeasured or cell-gapped, with the pairing (2026-09-20 session results marked D
 | 1 — DONE | OLMoE (fastest, fits RAM) | `--ubatch` 256/1024 | −0.9 % / −1.7 %: **512 confirmed** as the protocol default, with numbers |
 | 2 — DONE | OLMoE | `--dense-odirect` | −0.6 %: neutral on fits-RAM (dense barely read post-warmup) |
 | 3 — DONE | OLMoE | `--ngram`, prose vs repetition prompt | prose **−4.3 %** (5.6 % coverage); repetition **+3.3 %** (64.5 % accept, 1.45 tok/verify) — works when fed, CPU verify cost caps it |
-| 4 | LFM2.5 (hybrid) | `--ngram` | does speculative verify compose with recurrent-state rollback planes? |
-| 5 | Cyber-Tiel (MTP carrier) | `--mtp` on the exact matrix cell (Q4_K_M) | mtp.md measured MXFP4/other files; the 21 GB carrier cell itself is unrowed |
-| 6 | Cyber-Tiel (81.9 % hit) | `--expert-substitute`, `--drop-in-prefill` | substitution doc used Qwen3.6; headroom check on the carrier's ~18 % misses |
-| 7 | Qwen3.6 (deepest thrash) | `--io-two-wave` | the one I/O-timing knob with no table anywhere |
-| 8 | any | `--release-mmap` | load-peak metric only; not a tok/s row |
+| 4 — DONE | LFM2.5 (hybrid) | `--ngram` | **+7.6 %**: speculative verify composes with the rs rollback planes (48.5 % accept); [host-benchmarks.md](host-benchmarks.md) §Feature A/B |
+| 5 — DONE | Cyber-Tiel (MTP carrier) | `--mtp` on the exact matrix cell (Q4_K_M) | **+5.2 %** on the thrash profile (51.3 % accept, 2.51 tok/verify): speculation pays on compute-bound cells, not flash-bound ones |
+| 6 — DONE | Cyber-Tiel (81.9 % hit) | `--expert-substitute`, `--drop-in-prefill` | substitute **+47.2 %** (biggest single win on this host); drop-in-prefill **−11.6 %** vs drop alone — keep prefill dropping off |
+| 7 — DONE | Qwen3.6 (deepest thrash) | `--io-two-wave` | **+25.2 %**, hard faults 5.1× lower (175 → 34.6/tok) — the last untabled knob pays on the worst cell |
+| 8 | any | `--release-mmap` | load-peak metric only; not a tok/s row — still open, lowest priority |
 
 Lossy knobs report their quality evidence in the same row — that is the rule, not a preference.
-Rows 5/6 share one Cyber-Tiel load session (load is the expensive part at 21 GB).
+The substitution cell's quality gate was measured on Qwen3.6 (substitution doc); treat the
+Cyber-Tiel substitution cell's text as ungated until the same gate runs on that model.
+Full results with the mechanism columns (majflt/tok, stall s/tok):
+[host-benchmarks.md](host-benchmarks.md) §"Feature A/B".
