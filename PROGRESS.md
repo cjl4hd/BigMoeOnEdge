@@ -6,64 +6,76 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-19 (session 7 wrap-up). Phase: host bench campaign —
-three models published (Ornith, Cyber-Tiel, LFM2.5); the doc now carries a
-summary/conclusions/recommendations section; queue head is Laguna-XS.*
-*One-line status: README perf column refreshed on `cjl4hd:main` (`3999832`) with the
-Cyber-Tiel points and a stale rs-seq claim fixed; host-benchmarks.md gained
-Summary/Conclusions/Recommendations; then the full LFM2.5-8B batch measured and
-published (`6d0bc1e` + ratio fix `f9b9f4f`) — the fits-RAM contrast case: (a) 9.69
-tok/s / 0 majflt, (b) 8.64 tok/s (streaming LOSES on a resident model, −12%), warmup
-T1 7.59 → 1.12 s (6.8×), auto-echo T2/T3 24/124 and 24/205 (LFM2.5's template echoes
-natively — no reconcile turn), c4 48/0, c5 rewind 26/22 with prefill 2.82 → 1.25 s and
-T1 1 fresh / 22 reused (warmup+rs-seq composition replicated on a second arch family).
-Self-caught ratio slip (7×→~5×) fixed same session. Queue: Laguna-XS next.*## State delta (this session)
+*Resume last rewritten: 2026-09-19 (session 8 wrap-up). Phase: host bench campaign —
+four models published (Ornith, Cyber-Tiel, LFM2.5, Laguna); queue head is Ling-mini.*
+*One-line status: arc pushed to fork (arc == fork/feat/session-residency at 8958e88);
+full Laguna-XS-2.1 batch measured and published (`d336133` + audit fixes `8c77846`) —
+the matrix's first NON-HYBRID (verified in llama-arch.cpp: no hybrid/rollback listing,
+no recurrent tensors): (a) 1.37 tok/s / 642 majflt, (b) 1.95 tok/s / 65 majflt and
+PREFILL also speeds up (47.5 → 34.1 s — a 2×-RAM baseline thrashes prefill too),
+warmup T1 ~24× (30.4 → 1.28 s) composing freely, c4 divergence reuses 55 tokens with
+rs-seq OFF (free partial chop — the divergence tax is a HYBRID phenomenon), c5 ≡ c4
+(snapshot pool unused = clean classification confirmation), auto-echo REDUNDANT on
+this template (native reasoning rendering; echo rewrite costs a 252-fresh reconcile
+turn). Laguna also needs MAXTOK 384 (reasoning-heavy: 192/256 truncated think spans;
+no reasoning-budget wiring in the CLI). Two more audit catches: my own MTP-carrier
+swap was backwards (Cyber-Tiel has the nextn tensors, Laguna none) and fault ratios
+are 3.6–9.9×. Session-7 (LFM2.5 fits-RAM contrast, README/summary work) is in the
+history below. Queue: Ling-mini next.*## State delta (this session)
 
-- **README in-flight table refreshed on fork/main (`3999832`):** append-reuse row gains
-  the Cyber-Tiel host point (28/222–265, prefill 42→10–12 s); the `--rs-seq` row's stale
-  "restore not bit-exact" claim replaced with the true state (exact 9/9 cutsweep + live
-  on 35B hybrids); warmup row qualified (reuse part needs `--rs-seq` on thinking
-  hybrids). host-benchmarks.md gained **Summary / Conclusions / Recommendations**
-  grounded in the published rows.
-- **LFM2.5-8B-A1B full batch (`6d0bc1e`, fix `f9b9f4f`) — the fits-RAM contrast case:**
-  (a) 9.69 tok/s, load 10.5 s, prefill 1.65 s, 0 majflt; (b) 8.64 tok/s, prefill 7.9 s
-  (streaming is a NET LOSS with no thrash to fix — headline conclusion, now in the
-  recommendations); (c) warmup T1 7.59 → 1.12 s (6.8×), reuse still 0 (prefix-cut);
-  auto-echo T2 24/124, T3 24/205, prefill ~1.2 s — LFM2.5's template echoes natively,
-  so there is NO reconcile turn (unlike qwen35 family); (c4) 48/0; (c5) rewind 26/22,
-  prefill 2.82 → 1.25 s, T1 1 fresh / 22 reused at 0.12 s — composition replicated on
-  lfm2moe, second arch family with a live rollback proof.
-- **Second self-caught ratio slip:** published "7× faster prefill" for fits-RAM mmap;
-  7.9/1.65 is ~5×. Fixed `f9b9f4f` in the same session. The audit rule now applies to
-  derived ratios too, not just transcribed absolute numbers.
-- **Watched PRs (this session):** #29085 OPEN/REVIEW_REQUIRED, #197 OPEN (checked at
-  session-6 start; nothing in either session's flow touched them). Stacked-PR plan and
-  #29117 reopen stay held.
-- **Session 6 detail (Cyber-Tiel batch, clear-block mechanism, composition find,
-  tooling):** in the session-6 history entry below — the resume carries only what is
-  still current.
+- **Arc pushed at session start (user request):** `feat/session-residency` 2070368 →
+  8958e88 on fork; the session-8 wrap-up commit below is the only local commit again.
+- **Laguna-XS-2.1 full batch (`d336133`, fixes `8c77846`) — the first NON-hybrid:**
+  arch `laguna` is in neither llm_arch_is_hybrid nor llm_arch_supports_rs_rollback
+  (verified in the pin's llama-arch.cpp), and its gguf has no recurrent/conv state
+  (only standard attention + sliding window; zero nextn/MTP keys or tensors — Cyber-Tiel
+  is the MTP carrier). (a) 1.37 tok/s, load 41.9 s, 642 majflt/tok; (b) 1.95 tok/s
+  (+42%), 65 majflt/tok, hit 82.1%, prefill 34.1 s vs (a)'s 47.5 — the FIRST model in
+  the matrix whose prefill also speeds up under streaming; (c) warmup T1 30.4 → 1.28 s
+  (~24×) composing freely (T1 1 fresh / 54 reused — suffix-chop, no snapshots);
+  auto-echo redundant (T2 reconcile 252 fresh / 44 s, T3 25/310 — plain clients
+  already reuse without echoing, so leave --auto-echo off on laguna-class templates);
+  (c4) divergence T2 28 prompt / 55 reused with rs-seq OFF — a hybrid full-clears the
+  same shape: the divergence tax is a hybrid phenomenon; (c5) ≡ c4 (snapshot pool
+  unused — the clean confirmation of the classification).
+- **MAXTOK ladder for reasoning-heavy models:** Laguna truncated at 192 AND 256
+  (verdict FAIL, empty content, coherent-but-cut reasoning — measured, not degenerate);
+  384 passes all cells. Runs executed in a detached tmux loop (background cells die
+  between tool calls; tmux survives — sessions 4/6 facts). c-suite took ~25 min for
+  c2–c5 after c1's cold ~9 min.
+- **Audit catches this session (both mine, both fixed same session):** (1) a header
+  edit claimed Laguna is the MTP-capable arch — backwards, Cyber-Tiel carries the
+  nextn tensors (qwen35moe.nextn_predict_layers=1) and Laguna has none; the original
+  header was right. (2) fault-collapse ratios are 3.6×/8.6×/9.9× (I had rounded to
+  "~6–9×") and a c-row tok/s range was 1.9–2.0, not 1.9–2.1. Rule stands: every
+  number and ratio from the run's own CSV/log, never from memory.
+- **Watched PRs (this session):** not re-checked; session 6 checked both OPEN — no
+  action in this session depended on them. Next session should re-check.
+- **Session 7 record (README perf column, summary section, LFM2.5 fits-RAM batch,
+  streaming-loses-on-resident conclusion):** in the session-7 history entry below.
 
 ## Artifacts touched (this session)
 
 | File | What |
 |---|---|
-| `scripts/host-bench-readme-perf-summary.patch` | the README perf points + summary/conclusions/recommendations diff published as 3999832 |
-| `scripts/host-bench-lfm25-c1c5.patch` | the LFM2.5 rows + summary fold-in diff published as 6d0bc1e |
-| `scripts/host-bench-lfm25-fix1.patch` | the ratio correction published as f9b9f4f (7× → ~5×) |
-| `PROGRESS.md` | this rewrite + the session-7 history entry |
-| `cjl4hd:main` `3999832` + `6d0bc1e` + `f9b9f4f` | published: README perf column; Summary/Conclusions/Recommendations; LFM2.5 section + queue line |
-| `.bench-report/LFM25-a-baseline.{csv,log}` | LFM2.5 cell (a) raw evidence (direct CLI run; bench-report's own CSV covers cell b) |
+| `scripts/host-bench-laguna-c1c5.patch` | the Laguna rows + summary/README fold-in diff published as d336133 |
+| `scripts/host-bench-laguna-fix1.patch` | the audit fixes published as 8c77846 (MTP carrier back to Cyber-Tiel; ratios 3.6–9.9×) |
+| `PROGRESS.md` | this rewrite + the session-8 history entry |
+| `cjl4hd:main` `d336133` + `8c77846` | published: Laguna section (first non-hybrid), summary/recommendations updates, README perf column |
+| `.bench-report/Laguna-a-baseline.{csv,log}` | Laguna cell (a) raw evidence; bench-report's own CSV covers cell (b) |
 
-Evidence (ephemeral, regenerable by rerunning the cells): `/tmp/bench-lfm25/server-c{1..5}.log`,
-`/tmp/bench-lfm25/c{1..5}/` (per-turn t*/r* JSON), plus session 6's `/tmp/bench-cyber/` tree.
+Evidence (ephemeral, regenerable by rerunning the cells): `/tmp/bench-laguna/server-c{1..5}.log`,
+`/tmp/bench-laguna/c{1..5}/` — note c1 contains BOTH failed attempts (192/256 budgets) and
+the passing 384 run in one server log; per-turn JSONs are the 384 run's. Session-7's
+`/tmp/bench-lfm25/` tree likewise still on disk.
 
-Arc state: `feat/session-residency` TWO commits ahead of `fork/feat/session-residency`
-(session-6 `14cdfe8` and session-7 wrap-ups — the user has not pushed yet); the
-`core/src/engine/session.cpp` pos0 port (upstream `4fea119de` API rename) stays
-working-tree-only — NEVER commit it (the pin still has `n_past` and would not build);
-stash it for pin builds and the ctest gate. Engine-side branches: `bench/host-rs` on
-cjl4hd/llama.cpp (what `build-bench/` links); `fix/rs-rollback-index-shift` upstream,
-PR #29117 closed until #29085 merges.
+Arc state: `feat/session-residency` == `fork/feat/session-residency` at `8958e88`
+(pushed this session); this wrap-up commit goes on top locally per the session-5
+convention. The `core/src/engine/session.cpp` pos0 port stays working-tree-only —
+NEVER commit it (the pin still has `n_past` and would not build); stash it for pin
+builds and the ctest gate. Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp
+(what `build-bench/` links); `fix/rs-rollback-index-shift` upstream, PR #29117 closed
+until #29085 merges.
 
 ## Environment state
 
@@ -74,7 +86,7 @@ PR #29117 closed until #29085 merges.
 - **Models** (`~/llm/models/`): Ling-mini-2.0, LFM2.5-8B-A1B-UD-Q4_K_M (note: no plain
   `-Q4_K_M` file — sweeps use the UD file), Qwen3.5-9B, olmoe-1b-7b, Laguna-XS-2.1,
   Ornith-1.5, Qwen3-30B, Qwen3.6-35B, Cyber-Tiel-35B.
-- **Warmup cache** `~/.cache/bmoe-serve/warmup.json`: holds the LFM2.5 chain (valid,
+- **Warmup cache** `~/.cache/bmoe-serve/warmup.json`: holds the Laguna chain (valid,
   self-regenerating — the next serve on any other model overwrites it).
 - **Bench build**: `build-bench/` = the arc linked against the clone llama
   (`bench/host-rs`); requires the session.cpp pos0 working-tree port. The pin build
@@ -110,24 +122,28 @@ PR #29117 closed until #29085 merges.
 
 ## Next actions (ordered)
 
-1. **Continue the bench batch — Laguna-XS-2.1 next** (LFM2.5 done), then Ling-mini,
-   Qwen3-30B, Qwen3.6-35B, olmoe. Per model: (a) direct pin-build CLI run — NOT
+1. **Continue the bench batch — Ling-mini-2.0 next** (Laguna done), then Qwen3-30B,
+   Qwen3.6-35B, olmoe. Per model: (a) direct pin-build CLI run — NOT
    `bench-report.sh`, which hardcodes the streaming stack and is cell (b) — same
    protocol minus the streaming flags; (b) `scripts/bench-report.sh`; (c1–c3)
-   `cellc.sh` (MAXTOK: 160 for the 35Bs, 192 for thinking models — reasoning eats
-   smaller budgets); (c4/c5) divergence cells — c5 budget stays 64 per the OOM law.
-   Publish each model's rows via `scripts/publish-host-bench.sh`, then fold the model
-   into the doc's Summary/Conclusions/Recommendations and the README perf column.
-   **Audit rule (twice-earned):** re-read every number AND every derived ratio from
-   the run's own CSV before it goes in a patch. Dense models skipped per user.
-2. **When #29085 merges: reopen PR #29117** (`gh pr reopen 29117 --repo ggml-org/llama.cpp`,
-   fall back to re-creating from branch `fix/rs-rollback-index-shift`), humanize its
-   description first (`/tmp/pr-index-shift-description-draft.md` is the tool draft — a
-   starting point only), then ready-for-review. Flag in the PR: `seq_rm` now returns
-   false where it used to return true; callers that ignore it fall back to re-prefill.
-   Overlap scan (2026-09-18, all 200 open ggml-org PRs): no blockers; one watch item —
-   #28976 (WebGPU GDN kernel) must keep the snapshot-slot contract or the plane law
-   breaks on that backend.
+   `cellc.sh` (MAXTOK: 160 for the 35Bs, 192 for LFM2.5-class, 384 for
+   reasoning-heavy Laguna-class — start 256 and ladder from the r1/r2 reasoning
+   lengths); (c4/c5) divergence cells — c5 budget stays 64 per the OOM law; for a
+   small-model c-suite, run the cells in ONE detached tmux loop (survives tool
+   calls). Publish each model's rows via `scripts/publish-host-bench.sh`, then fold
+   the model into the doc's Summary/Conclusions/Recommendations and the README perf
+   column. **Audit rule (four catches now):** every number, ratio, and arch claim
+   from the run's own CSV/log — never from memory. Dense models skipped per user.
+2. **Check watched PRs** (`gh pr view 29085 --repo ggml-org/llama.cpp` and #197 on
+   Helldez/BigMoeOnEdge): last verified OPEN in session 6. When #29085 merges: reopen
+   PR #29117 (`gh pr reopen 29117 --repo ggml-org/llama.cpp`, fall back to re-creating
+   from branch `fix/rs-rollback-index-shift`), humanize its description first
+   (`/tmp/pr-index-shift-description-draft.md` is the tool draft — a starting point
+   only), then ready-for-review. Flag in the PR: `seq_rm` now returns false where it
+   used to return true; callers that ignore it fall back to re-prefill. Watch item:
+   #28976 (WebGPU GDN kernel) must keep the snapshot-slot contract. When #197
+   merges: execute the stacked-PR plan (Open questions 1); submodule bump + full
+   gates when #29085 lands in a pin bump.
 3. **After the batch: refresh the evidence tables** — `docs/benchmarks.md`/`docs/serve.md`
    gain host rows; the README in-flight table's perf column gets second/third points.
 4. **Watch #29085 and #197** (`gh pr view 29085 --repo ggml-org/llama.cpp`); execute the
@@ -710,3 +726,38 @@ listeners or engine processes; warmup cache holds the LFM2.5 chain; the arc is t
 commits ahead of `fork/feat/session-residency` (session-6 and -7 wrap-ups, push left to
 the user per convention); `fork/main` carries all doc commits (5988e17 → 4418988 →
 d19ead7 → 3999832 → 6d0bc1e → f9b9f4f). Queue head: Laguna-XS-2.1.
+
+## 2026-09-19 (session 8) — arc pushed; Laguna-XS batch: the first non-hybrid
+
+User request: push the arc, then the Laguna-XS-2.1 batch and publish. Push done first
+(`2070368..8958e88`), clearing the two-commit backlog.
+
+**Classification find (the session's real result).** Laguna measured unlike every prior
+model and the c-suite only made sense under one hypothesis: upstream classifies `laguna`
+as a plain-transformer MoE. Verified three ways — `llama-arch.cpp` lists it in neither
+`llm_arch_is_hybrid` nor `llm_arch_supports_rs_rollback`; the gguf carries only standard
+attention keys (sliding window, rope dims) with no recurrent/conv state tensors; and the
+c5 cell is behaviourally identical to c4 (snapshot pool unused). Consequences, all
+published: the divergence turn reuses 55 tokens with rs-seq OFF (hybrids full-clear the
+same shape — the divergence tax is a hybrid phenomenon); warmup composes freely (T1
+1 fresh / 54 reused); `--auto-echo` is REDUNDANT on this template and its echo rewrite
+actually costs a 252-fresh reconcile turn (c3 T2 44 s) before a decode-side T3 win —
+recommendation: leave it off on laguna-class templates. Also the first model whose
+PREFILL speeds up under streaming (47.5 → 34.1 s): a ~2×-RAM baseline thrashes prefill
+too. An earlier header edit claimed Laguna was the MTP-capable arch — the post-publish
+audit proved it backwards (Cyber-Tiel has `qwen35moe.nextn_predict_layers=1` + nextn
+tensors; Laguna has zero) and `8c77846` restored the original carrier claim plus exact
+fault ratios (3.6×/8.6×/9.9×, not "~6–9×").
+
+**Process:** MAXTOK ladder measured — 192 and 256 truncate Laguna's think spans (coherent
+verbose reasoning cut at the budget; verdict FAIL, empty content), 384 passes all cells;
+the CLI has no reasoning-budget wiring (upstream's common/reasoning-budget.h unwired in
+bmoe-cli), so max_tokens is the honest lever. All five cells ran in ONE detached tmux
+loop (~25 min wall) since background processes die between tool calls; the loop self-
+terminated and every result was re-derived from the on-disk logs (per-turn JSONs +
+TELEMETRY lines), answers 42/52/62 verified in every cell.
+
+**State:** no stray listeners/processes; user's tmux session untouched; warmup cache
+holds the Laguna chain; arc synced at 8958e88 (wrap-up commit local on top);
+`fork/main` doc chain now 5988e17 → 4418988 → d19ead7 → 3999832 → 6d0bc1e → f9b9f4f →
+d336133 → 8c77846. Queue head: Ling-mini-2.0.
