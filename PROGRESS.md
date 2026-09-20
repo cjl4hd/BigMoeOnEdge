@@ -59,7 +59,10 @@ tip. Queue: Qwen3-30B next (bench track).*## State delta (this session)
 | File | What |
 |---|---|
 | `/tmp/pr-29085-body.md` | the exact body now on #29085 (source of truth for future edits) |
+| `~/git/lp-ci/` | CI worktree (tip + FULL PR patch) + `ci-results/` + `ci-mnt/` + venv — the local-CI runner; rerun command in Next actions 1; remove when CI is done |
 | `/tmp/lp-verify/` | llama.cpp verify worktree at tip `f072b1037` + lean build (`build-tmp/`), PR patch APPLIED uncommitted, fixtures in `build-tmp/test-models/` — KEEP for the mismatch repro work; regen commands in the session-10 history entry |
+| `/tmp/nemotron-probe.log` | nemotron_h dummy rollback probe (PASSES, diff 0) |
+| `/tmp/nemotron-budget-issue-draft.md` | DRAFT upstream issue for the NEMOTRON_H/H_MOE budget gap — user reviews, owns, posts |
 | `PROGRESS.md` | this rewrite + the session-10 history entry |
 
 No bmoe-repo code changes this session; `session.cpp` pos0 port untouched
@@ -136,16 +139,28 @@ upstream, PR #29117 closed until #29085 merges.
 
 ## Next actions (ordered)
 
-1. **User: flip #29085 to ready for review** (`gh pr ready 29085 --repo
-   ggml-org/llama.cpp`) → full CI + bot re-scan; both flags should clear. Further body
-   edits: REST PATCH from `/tmp/pr-29085-body.md` (gh pr edit is broken — see
-   Environment).
-2. **Narrow the CPU multi-seq mismatch** (commands in the session-10 history entry):
-   rerun `test-recurrent-state-rollback` on the other real allowlist models on hand
-   (Qwen3.5-9B first — 35B/30B loads are slow on CPU), and once on a non-lean build,
-   to bound arch-specificity vs config; then draft the upstream issue (user-owned
-   wording) if it holds. `/tmp/lp-verify` is the ready-made runner (patch applied).
-   When done: remove the worktree (`git worktree remove --force /tmp/lp-verify`).
+1. **User: flip #29085 to ready for review** — local CI now GREEN (see Addendum:
+   54/54 debug, 55/55 release incl. both new rollback rows, 5/5+5/5 model suites,
+   qwen3-0.6B quantize/ppl suites all passed, CI_EXIT=0, zero FAILED anywhere), and
+   the body carries both checked boxes (`Ran CI locally` included, added 08:5x via
+   REST PATCH from `/tmp/pr-29085-body.md`). `gh pr ready 29085 --repo
+   ggml-org/llama.cpp` → full CI + bot re-scan. Further body edits: REST PATCH
+   (gh pr edit is broken — see Environment). After CI is no longer needed: free
+   ~9 GB with `git worktree remove --force ~/git/lp-ci` (keep `ci-results/` until
+   the PR lands if desired).
+2. **Arch sweep follow-up (user todo — sweep DONE, one real hit):** cross-checked
+   `llm_arch_supports_rs_rollback` (10 archs) vs the `graph_max_nodes` elevated budget
+   (16 archs) on tip: **NEMOTRON_H and NEMOTRON_H_MOE are rollback-capable but NOT
+   budgeted** — the same latent LFM2-class gap (every other allowlist arch is
+   correctly budgeted; the budget-without-rollback set — DFLASH, HRM_TEXT, HY_V4,
+   KIMI_LINEAR, MINIMAX_01/M3, NANBEIGE, QWEN3NEXT — is intentional). Dummy-fixture
+   probe PASSES (`/tmp/nemotron-probe.log`, max diff 0) ⇒ severity is the
+   model-dependent razor-edge (LFM2's dummy also passed; its real  Q4_K_M asserted); no real nemotron-h gguf on this host. Scope DECIDED (user):
+  **raise an upstream ISSUE and hand off** — this host cannot verify the latent crash
+  (no nemotron-h hardware/model), so no local fix; user posts the issue themselves
+  (draft at `/tmp/nemotron-budget-issue-draft.md`, user-owned wording). Bonus:
+  nemotron multi-seq matched at diff 0 ⇒ the CPU split-replay mismatch is
+  lfm2-specific, not a generic CPU-hybrid issue.
 3. **Continue the bench batch — Qwen3-30B-A3B next** (Ling-mini done), then
    Qwen3.6-35B, olmoe. Per model: (a) direct pin-build CLI run — NOT
    `bench-report.sh`, which hardcodes the streaming stack and is cell (b) — same
@@ -869,3 +884,39 @@ cache holds the Ling-mini chain; arc synced at b7f3cd0 (wrap-up commit local on 
 (+ wrap-up local); #29085 template-compliant + draft; verify worktree kept at
 `/tmp/lp-verify` (patch applied, regenerable — commands above); queue head
 Qwen3-30B-A3B (bench track unpauses next session).
+
+**Addendum (same session — local CI attempt + arch sweep):**
+
+- **Local CI attempt 1 (07:19):** `~/git/lp-ci` worktree (tip `f072b1037` + FULL patch
+  incl. test rows, verified 2+4 greps) + `bash ci/run.sh ./ci-results ./ci-mnt` in
+  tmux → died at the git-lfs prerequisite check (`command -v git-lfs` fails; tokenizer
+  tests read LFS-tracked vocab ggufs). Nothing built; rerun after installing git-lfs
+  (Next actions 1 has the exact command).
+- **Arch sweep (user todo: "check other new or less popular architectures that support
+  recurrent rollback"):** set-diff of `llm_arch_supports_rs_rollback` (10: BAILINGMOE3,
+  DEEPSEEK4, KIMI_K3, LFM2, LFM2MOE, NEMOTRON_H, NEMOTRON_H_MOE, QWEN35, QWEN35MOE,
+  QWEN4EXP) against the `graph_max_nodes` budget list (16): the only gaps are
+  **NEMOTRON_H + NEMOTRON_H_MOE**. Process note: the first sweep regex grabbed the
+  wrong function region and reported all 10 as gaps — re-anchored on the exact
+  signature before believing it (trust the artifact over the first answer).
+- **Nemotron probe:** dummy `nemotron_h-dense.gguf` rollback suite PASSES on the lean
+  build (exit 0, split replay max diff 0, `/tmp/nemotron-probe.log`) — a latent-only
+  gap, severity model-dependent (LFM2 precedent: its dummy passed too, its real
+  Q4_K_M asserted). Upstream already registers nemotron rollback test rows, so a
+  scope extension of #29085 is literally +2 lines in the same list; a separate PR is
+  also defensible. Decision pending.
+- **Mismatch narrowed:** nemotron multi-seq split replay = diff 0 on CPU ⇒ the
+  real-LFM2.5 11.587 mismatch is lfm2-family-specific, not a generic CPU-hybrid issue.
+- **Nemotron scope decision (user):** cannot resolve on this hardware (no real model)
+  → raise the upstream issue and leave it to someone with the hardware; draft issued
+  at `/tmp/nemotron-budget-issue-draft.md` for the user to own and post. #29085 stays
+  LFM2-minimal.
+- **Local CI GREEN (attempt 2):** after user-level git-lfs install (`~/.local/bin`,
+  v3.8.0 tarball, no sudo) + `git lfs install` + `git -C ~/git/lp-ci lfs pull`, the
+  full `ci/run.sh` CPU run finished **CI_EXIT=0**: 54/54 debug, 55/55 release (both
+  new rollback rows Passed: lfm2 0.16 s, lfm2moe 0.18 s), 5/5 + 5/5 model-labeled
+  suites, qwen3-0.6B download→convert→12 quantizations→ppl + save/load suites all
+  passed; backend-ops, archs models, tensor-split, scripts — zero FAILED lines in
+  any log. PR body updated with both checked boxes (template boilerplate, backed by
+  the run). Evidence: `~/git/lp-ci/ci-results/*.log` (~9 GB worktree incl. models-mnt
+  — removable after the PR lands, keep the logs).
