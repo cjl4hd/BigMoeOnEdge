@@ -6,17 +6,16 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-20 (session 15). Phase: **post-queue validation** —
-bench campaign complete; evidence docs refreshed; swap 8G live; aider edit-turn
-reuse PROVEN on real agent payloads. Upstream: #29085 READY FOR REVIEW — user
-monitors CI.*
-*One-line status: swap verified 8G/658Mi-used; impact doctrine recorded (thrash
-metrics unchanged — file-backed eviction; c5-class anon over-commits now complete
-instead of OOM; majflt/tok stays the guard). Aider on the serve bridge: turn B
-recovered **504 of 576** prompt tokens (prefill 20.7 s vs 51.5 s cold) — cross-
-edit-turn KV reuse at 87.5%, divergence point = aider's changed file snapshot;
-both edits correct. Ling-mini arch noted `bailingmoe2`. Daily driver LFM2.5 UP on
-:8017 with --auto-echo, ready for the opencode re-test.*
+*Resume last rewritten: 2026-09-20 (session 16). Phase: **feature A/B campaign** —
+OLMoE cell results landed (ubatch 512 CONFIRMED with numbers; dense-odirect
+neutral; ngram −4.3% prose / +3.3% repetition); feature-coverage matrix published
+and corrected (`a81106b`); backlog narrowed to LFM2.5 ngram, Cyber-Tiel MTP-on-
+matrix-cell, Cyber-Tiel substitute/drop-in-prefill, Qwen3.6 io-two-wave.*
+*One-line status: published `790d364` (A/B matrix) then `a81106b` (correction —
+the feature docs mtp/ngram/route-ahead/substitution/prefetch/expert-prediction/
+row-stream ALREADY carry measured tables; my "unmeasured" audit had only diffed
+the benchmark tables). bench-report.sh PROMPT now env-overridable (the `-p`-after-
+default bug made my first code-prompt pair silently run the essay prompt).*
 
 ## State delta (this session)
 
@@ -24,6 +23,25 @@ both edits correct. Ling-mini arch noted `bailingmoe2`. Daily driver LFM2.5 UP o
   `/swapfile_extra` line gone. Impact doctrine in Environment below: thrash
   profiles unchanged (file-backed eviction never touches swap), c5-class anon
   over-commits now complete instead of OOM, majflt/tok stays the pressure guard.
+- **Feature A/B campaign started (published `790d364`, corrected `a81106b`):**
+  pairing matrix added to benchmark-method.md; then CORRECTED — mtp.md, ngram.md,
+  route-ahead.md, cache-aware-substitution.md, prefetch.md, expert-prediction.md,
+  row-gathered-tables.md already carry measured tables (models: Qwen3.5/3.6,
+  Qwen3-30B, gpt-oss). Live backlog: LFM2.5 × ngram (rollback composition),
+  Cyber-Tiel × `--mtp` on the exact Q4_K_M matrix cell + substitute/drop-in-
+  prefill headroom, Qwen3.6 × `--io-two-wave` (the only never-tabled knob),
+  `--release-mmap` load metric. **ALSO: docs/serve.md exists on the arc but was
+  NEVER published to fork/main** — check why before the next serve-doc work.
+- **OLMoE A/B cells (pin build; ratios internally consistent — baselines ~13.3
+  tok/s here vs 10.13 published on the bench stack, so only RATIO rows are
+  comparable):** ubatch 256 −0.9% / 1024 −1.7% → **512 confirmed**; dense-odirect
+  −0.6% neutral; ngram prose −4.3% (5.6% coverage, 16.7% accept) vs repetition
+  prompt **+3.3%** (64.5% accept, 1.45 tok/verify) — ngram works when fed but
+  CPU verify cost caps it on a small model.
+- **bench-report.sh fixed:** `PROMPT` is now `${PROMPT:-default}` (was
+  hard-assigned; the script appends its own `-p` AFTER extra args, so `-p` on the
+  CLI could never override — my first code-prompt pair silently ran the essay
+  prompt; detected via identical ngram draft stats across 'different' prompts).
 - **Aider edit-turn reuse — PROVEN (post-queue item b):** real aider session over
   the serve bridge (Ling-mini, whole edit format, no auto-commits). Server
   TELEMETRY per call: turn A call 1 (cold) 857/0/51.5 s; turn A call 2 (aider's
