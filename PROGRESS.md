@@ -72,6 +72,7 @@ metric) + the Cyber-Tiel substitution quality gate.*
 |---|---|
 | `PROGRESS.md` | this rewrite + the session-15 history entry |
 | `scripts/host-bench-feature-results.patch` | the feature-A/B section + method-matrix update published as e4345ad |
+| `scripts/host-bench-scoreboard.patch` | the feature scoreboard (lossless/lossy best-per-feature tables) published as ab16ff5 |
 | `/tmp/feat-ab/{olmoe,cyber,lfm,q36}/` | raw A/B evidence: CSVs + logs per cell (regenerable via the recipes in the history) |
 | `PROGRESS.md` | this rewrite + the session-17 history entry |
 | Kept | `/tmp/lp-verify/` (mismatch runner), `~/git/lp-ci/` (~9 GB, removable after #29085 lands), `/tmp/nemotron-budget-issue-draft.md` (user's to post) |
@@ -1119,6 +1120,6 @@ with the user.
   lossy rows cite the substitution doc's quality-gate protocol instead of char
   diffs. Raw evidence in /tmp/feat-ab/ (regenerable).
 
-**State:** published chain `790d364` → `a81106b` → `e4345ad` on fork/main; arc
+**State:** published chain `790d364` → `a81106b` → `e4345ad` → `ab16ff5` on fork/main; arc
 record this commit; remaining backlog: `--release-mmap` load metric (lowest),
 Cyber-Tiel substitution quality gate. #29085 + Nemotron draft still with user.
