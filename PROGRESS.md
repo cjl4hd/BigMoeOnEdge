@@ -6,70 +6,59 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-19 (session 8 wrap-up). Phase: host bench campaign —
-four models published (Ornith, Cyber-Tiel, LFM2.5, Laguna); queue head is Ling-mini.*
-*One-line status: arc pushed to fork (arc == fork/feat/session-residency at 8958e88);
-full Laguna-XS-2.1 batch measured and published (`d336133` + audit fixes `8c77846`) —
-the matrix's first NON-HYBRID (verified in llama-arch.cpp: no hybrid/rollback listing,
-no recurrent tensors): (a) 1.37 tok/s / 642 majflt, (b) 1.95 tok/s / 65 majflt and
-PREFILL also speeds up (47.5 → 34.1 s — a 2×-RAM baseline thrashes prefill too),
-warmup T1 ~24× (30.4 → 1.28 s) composing freely, c4 divergence reuses 55 tokens with
-rs-seq OFF (free partial chop — the divergence tax is a HYBRID phenomenon), c5 ≡ c4
-(snapshot pool unused = clean classification confirmation), auto-echo REDUNDANT on
-this template (native reasoning rendering; echo rewrite costs a 252-fresh reconcile
-turn). Laguna also needs MAXTOK 384 (reasoning-heavy: 192/256 truncated think spans;
-no reasoning-budget wiring in the CLI). Two more audit catches: my own MTP-carrier
-swap was backwards (Cyber-Tiel has the nextn tensors, Laguna none) and fault ratios
-are 3.6–9.9×. Session-7 (LFM2.5 fits-RAM contrast, README/summary work) is in the
-history below. Queue: Ling-mini next.*## State delta (this session)
+*Resume last rewritten: 2026-09-19 (session 9 wrap-up). Phase: host bench campaign —
+five models published (Ornith, Cyber-Tiel, LFM2.5, Laguna, Ling-mini); queue head is
+Qwen3-30B.*
+*One-line status: arc pushed (`8958e88..b7f3cd0`); Ling-mini-2.0 batch measured and
+published (`8104b26` + cache-size fix `8605806`) — the second plain-transformer MoE
+(`bailingmoe2`, verified in llama-arch.cpp; the rollback list's BAILINGMOE3 is a
+different arch) and a NON-THINKING model, at 9.9 GB the barely-fits edge case:
+(a) 12.59 tok/s / 0.86 majflt (essentially resident), (b) 8.63 tok/s — streaming LOSES
+31% and its 7.5 GiB expert cache + anon dense copy PUSHED THE MODEL INTO SWAP
+(0.86 → 19.27 majflt/tok: the cache became the memory pressure; sharpest fits-RAM
+result yet), (c) reuse native from the first follow-up, no echo, no reconcile turn;
+auto-echo a verified no-op (c3 ≈ c2 + warm decode); c4 divergence 27/34 with rs-seq
+OFF; c5 ≡ c4; warmup T1 ~10× (0.80 s) composing freely (1/31). One audit catch
+(7.7 → 7.5 GiB) fixed same session. Session-8 (Laguna non-hybrid find) in history.
+Queue: Qwen3-30B next.*## State delta (this session)
 
-- **Arc pushed at session start (user request):** `feat/session-residency` 2070368 →
-  8958e88 on fork; the session-8 wrap-up commit below is the only local commit again.
-- **Laguna-XS-2.1 full batch (`d336133`, fixes `8c77846`) — the first NON-hybrid:**
-  arch `laguna` is in neither llm_arch_is_hybrid nor llm_arch_supports_rs_rollback
-  (verified in the pin's llama-arch.cpp), and its gguf has no recurrent/conv state
-  (only standard attention + sliding window; zero nextn/MTP keys or tensors — Cyber-Tiel
-  is the MTP carrier). (a) 1.37 tok/s, load 41.9 s, 642 majflt/tok; (b) 1.95 tok/s
-  (+42%), 65 majflt/tok, hit 82.1%, prefill 34.1 s vs (a)'s 47.5 — the FIRST model in
-  the matrix whose prefill also speeds up under streaming; (c) warmup T1 30.4 → 1.28 s
-  (~24×) composing freely (T1 1 fresh / 54 reused — suffix-chop, no snapshots);
-  auto-echo redundant (T2 reconcile 252 fresh / 44 s, T3 25/310 — plain clients
-  already reuse without echoing, so leave --auto-echo off on laguna-class templates);
-  (c4) divergence T2 28 prompt / 55 reused with rs-seq OFF — a hybrid full-clears the
-  same shape: the divergence tax is a hybrid phenomenon; (c5) ≡ c4 (snapshot pool
-  unused — the clean confirmation of the classification).
-- **MAXTOK ladder for reasoning-heavy models:** Laguna truncated at 192 AND 256
-  (verdict FAIL, empty content, coherent-but-cut reasoning — measured, not degenerate);
-  384 passes all cells. Runs executed in a detached tmux loop (background cells die
-  between tool calls; tmux survives — sessions 4/6 facts). c-suite took ~25 min for
-  c2–c5 after c1's cold ~9 min.
-- **Audit catches this session (both mine, both fixed same session):** (1) a header
-  edit claimed Laguna is the MTP-capable arch — backwards, Cyber-Tiel carries the
-  nextn tensors (qwen35moe.nextn_predict_layers=1) and Laguna has none; the original
-  header was right. (2) fault-collapse ratios are 3.6×/8.6×/9.9× (I had rounded to
-  "~6–9×") and a c-row tok/s range was 1.9–2.0, not 1.9–2.1. Rule stands: every
-  number and ratio from the run's own CSV/log, never from memory.
-- **Watched PRs (this session):** not re-checked; session 6 checked both OPEN — no
-  action in this session depended on them. Next session should re-check.
-- **Session 7 record (README perf column, summary section, LFM2.5 fits-RAM batch,
-  streaming-loses-on-resident conclusion):** in the session-7 history entry below.
+- **Arc pushed at session start (user request):** `8958e88..b7f3cd0`; the session-9
+  wrap-up commit below is the only local commit again.
+- **Ling-mini-2.0 full batch (`8104b26`, fix `8605806`) — second plain transformer,
+  barely-fits edge case:** arch `bailingmoe2` (no hybrid/recurrent listing; the
+  rollback list's BAILINGMOE3 is a different arch) and non-thinking (no reasoning
+  span in replies). 9.9 GB on 11 GB RAM: (a) 12.59 tok/s, load 21.3 s, prefill 2.26 s,
+  0.86 majflt/tok (essentially resident); (b) 8.63 tok/s (−31%), prefill 12.75 s
+  (5.6×), 19.27 majflt/tok — the streaming stack's 7.5 GiB cache + anon dense copy
+  pushed the model into swap: the cache BECAME the memory pressure (sharpest fits-RAM
+  result yet, headline of the recommendations); (c) reuse native from the first
+  follow-up (c1 T2 already 27/34) with no echo and no reconcile turn; `--auto-echo`
+  a verified no-op (c3 ≈ c2, decode gains from warm cache only); (c4) divergence 27/34
+  with rs-seq OFF (free chop); (c5) ≡ c4 (pool unused — same classification
+  confirmation as Laguna); warmup T1 ~10× (0.80 s) composing freely (1 fresh / 31).
+  c4's T1 prefill (34.4 s at 1.0 tok/s) noted in-doc as the cold-load outlier row.
+- **MAXTOK for Ling-mini:** 192 suffices (non-thinking model, no reasoning span);
+  c-suite ran in one tmux loop, all five cells inside ~5 min.
+- **Audit catch this session:** cache 7686.8 MiB is 7.5 GiB, not 7.7 (fixed `8605806`).
+- **Watched PRs (this session):** not re-checked; last verified OPEN in session 6.
+- **Session 8 record (arc push, Laguna non-hybrid find, MAXTOK 384 ladder, MTP-carrier
+  audit fix):** in the session-8 history entry below.
 
 ## Artifacts touched (this session)
 
 | File | What |
 |---|---|
-| `scripts/host-bench-laguna-c1c5.patch` | the Laguna rows + summary/README fold-in diff published as d336133 |
-| `scripts/host-bench-laguna-fix1.patch` | the audit fixes published as 8c77846 (MTP carrier back to Cyber-Tiel; ratios 3.6–9.9×) |
-| `PROGRESS.md` | this rewrite + the session-8 history entry |
-| `cjl4hd:main` `d336133` + `8c77846` | published: Laguna section (first non-hybrid), summary/recommendations updates, README perf column |
-| `.bench-report/Laguna-a-baseline.{csv,log}` | Laguna cell (a) raw evidence; bench-report's own CSV covers cell (b) |
+| `scripts/host-bench-ling-c1c5.patch` | the Ling-mini rows + summary/README fold-in diff published as 8104b26 |
+| `scripts/host-bench-ling-fix1.patch` | the cache-size fix published as 8605806 (7686.8 MiB = 7.5 GiB) |
+| `PROGRESS.md` | this rewrite + the session-9 history entry |
+| `cjl4hd:main` `8104b26` + `8605806` | published: Ling-mini section, summary/recommendations updates, README perf column |
+| `.bench-report/Ling-mini-a-baseline.{csv,log}` | Ling-mini cell (a) raw evidence; bench-report's own CSV covers cell (b) |
 
-Evidence (ephemeral, regenerable by rerunning the cells): `/tmp/bench-laguna/server-c{1..5}.log`,
-`/tmp/bench-laguna/c{1..5}/` — note c1 contains BOTH failed attempts (192/256 budgets) and
-the passing 384 run in one server log; per-turn JSONs are the 384 run's. Session-7's
-`/tmp/bench-lfm25/` tree likewise still on disk.
+Evidence (ephemeral, regenerable by rerunning the cells): `/tmp/bench-ling/server-c{1..5}.log`,
+`/tmp/bench-ling/c{1..5}/` (per-turn t*/r* JSON); earlier sessions' `/tmp/bench-{cyber,lfm25,laguna}/`
+trees likewise still on disk.
 
-Arc state: `feat/session-residency` == `fork/feat/session-residency` at `8958e88`
+Arc state: `feat/session-residency` == `fork/feat/session-residency` at `b7f3cd0`
 (pushed this session); this wrap-up commit goes on top locally per the session-5
 convention. The `core/src/engine/session.cpp` pos0 port stays working-tree-only —
 NEVER commit it (the pin still has `n_past` and would not build); stash it for pin
@@ -86,7 +75,7 @@ until #29085 merges.
 - **Models** (`~/llm/models/`): Ling-mini-2.0, LFM2.5-8B-A1B-UD-Q4_K_M (note: no plain
   `-Q4_K_M` file — sweeps use the UD file), Qwen3.5-9B, olmoe-1b-7b, Laguna-XS-2.1,
   Ornith-1.5, Qwen3-30B, Qwen3.6-35B, Cyber-Tiel-35B.
-- **Warmup cache** `~/.cache/bmoe-serve/warmup.json`: holds the Laguna chain (valid,
+- **Warmup cache** `~/.cache/bmoe-serve/warmup.json`: holds the Ling-mini chain (valid,
   self-regenerating — the next serve on any other model overwrites it).
 - **Bench build**: `build-bench/` = the arc linked against the clone llama
   (`bench/host-rs`); requires the session.cpp pos0 working-tree port. The pin build
@@ -122,27 +111,28 @@ until #29085 merges.
 
 ## Next actions (ordered)
 
-1. **Continue the bench batch — Ling-mini-2.0 next** (Laguna done), then Qwen3-30B,
+1. **Continue the bench batch — Qwen3-30B-A3B next** (Ling-mini done), then
    Qwen3.6-35B, olmoe. Per model: (a) direct pin-build CLI run — NOT
    `bench-report.sh`, which hardcodes the streaming stack and is cell (b) — same
    protocol minus the streaming flags; (b) `scripts/bench-report.sh`; (c1–c3)
-   `cellc.sh` (MAXTOK: 160 for the 35Bs, 192 for LFM2.5-class, 384 for
-   reasoning-heavy Laguna-class — start 256 and ladder from the r1/r2 reasoning
-   lengths); (c4/c5) divergence cells — c5 budget stays 64 per the OOM law; for a
-   small-model c-suite, run the cells in ONE detached tmux loop (survives tool
-   calls). Publish each model's rows via `scripts/publish-host-bench.sh`, then fold
-   the model into the doc's Summary/Conclusions/Recommendations and the README perf
-   column. **Audit rule (four catches now):** every number, ratio, and arch claim
-   from the run's own CSV/log — never from memory. Dense models skipped per user.
+   `cellc.sh` (MAXTOK: 160 for the 35Bs, 192 for non-thinking/small models, 384 for
+   reasoning-heavy Laguna-class — start 192 and ladder from the r1/r2 reasoning
+   lengths); (c4/c5) divergence cells — c5 budget stays 64 per the OOM law; run the
+   c-suite in ONE detached tmux loop (survives tool calls; the loop self-terminates,
+   results live on disk). Publish each model's rows via
+   `scripts/publish-host-bench.sh`, then fold the model into the doc's
+   Summary/Conclusions/Recommendations and the README perf column. **Audit rule
+   (five catches now):** every number, ratio, and unit conversion (MiB→GiB!) from
+   the run's own CSV/log — never from memory. Dense models skipped per user.
 2. **Check watched PRs** (`gh pr view 29085 --repo ggml-org/llama.cpp` and #197 on
-   Helldez/BigMoeOnEdge): last verified OPEN in session 6. When #29085 merges: reopen
-   PR #29117 (`gh pr reopen 29117 --repo ggml-org/llama.cpp`, fall back to re-creating
-   from branch `fix/rs-rollback-index-shift`), humanize its description first
-   (`/tmp/pr-index-shift-description-draft.md` is the tool draft — a starting point
-   only), then ready-for-review. Flag in the PR: `seq_rm` now returns false where it
-   used to return true; callers that ignore it fall back to re-prefill. Watch item:
-   #28976 (WebGPU GDN kernel) must keep the snapshot-slot contract. When #197
-   merges: execute the stacked-PR plan (Open questions 1); submodule bump + full
+   Helldez/BigMoeOnEdge): last verified OPEN in session 6 — three sessions stale.
+   When #29085 merges: reopen PR #29117 (`gh pr reopen 29117 --repo ggml-org/llama.cpp`,
+   fall back to re-creating from branch `fix/rs-rollback-index-shift`), humanize its
+   description first (`/tmp/pr-index-shift-description-draft.md` is the tool draft — a
+   starting point only), then ready-for-review. Flag in the PR: `seq_rm` now returns
+   false where it used to return true; callers that ignore it fall back to re-prefill.
+   Watch item: #28976 (WebGPU GDN kernel) must keep the snapshot-slot contract. When
+   #197 merges: execute the stacked-PR plan (Open questions 1); submodule bump + full
    gates when #29085 lands in a pin bump.
 3. **After the batch: refresh the evidence tables** — `docs/benchmarks.md`/`docs/serve.md`
    gain host rows; the README in-flight table's perf column gets second/third points.
@@ -761,3 +751,36 @@ TELEMETRY lines), answers 42/52/62 verified in every cell.
 holds the Laguna chain; arc synced at 8958e88 (wrap-up commit local on top);
 `fork/main` doc chain now 5988e17 → 4418988 → d19ead7 → 3999832 → 6d0bc1e → f9b9f4f →
 d336133 → 8c77846. Queue head: Ling-mini-2.0.
+
+## 2026-09-19 (session 9) — Ling-mini-2.0 batch: second non-hybrid, the barely-fits edge
+
+User request: push the session-8 wrap-up, then the Ling-mini-2.0 batch and publish.
+Push done first (`8958e88..b7f3cd0`).
+
+**Classification (verified before the c-suite ran, the session-8 lesson applied):**
+`bailingmoe2` is in neither the hybrid nor the recurrent lists; the one rollback-list
+hit in the grep was BAILINGMOE3 — a different arch. Second plain-transformer MoE in the
+matrix, and a NON-THINKING model (no reasoning span in replies — the session-2
+behavioral-probe finding). All c-suite differences followed: reuse native from the
+first follow-up (c1 T2 27 prompt / 34 reused, no echo, no reconcile turn), `--auto-echo`
+a verified no-op (c3 ≈ c2 with warm-cache decode gains), divergence turns free partial
+chops with rs-seq OFF (c4 27/34), c5 ≡ c4 (snapshot pool unused), warmup composing
+freely (T1 1 fresh / 31 reused; ~10× on prefill seconds, 0.08–0.8 s across cells).
+
+**The barely-fits edge case (the batch's headline).** At 9.9 GB on 11 GB RAM the mmap
+baseline is essentially resident: 12.59 tok/s, 0.86 majflt/tok, load 21.3 s. The (b)
+streaming stack LOSES 31% decode (8.63 tok/s) with prefill 5.6× slower (12.75 s) —
+because its 7.5 GiB expert cache plus the anon dense copy push the model into swap
+(0.86 → 19.27 majflt/tok): the cache itself became the memory pressure. Folded into
+the recommendations as the second and sharpest fits-RAM data point (LFM2.5: −11%;
+Ling-mini: −31%). One audit catch: 7686.8 MiB is 7.5 GiB, not 7.7 — fixed `8605806`
+same session (unit conversions joined the audit rule).
+
+**Process:** c4's T1 prefill row (34.4 s at 1.0 tok/s) is the cold-load cell racing the
+prior cells' page cache — noted as the outlier in-doc with its comparable T2 figure.
+All five cells ran in ONE tmux loop in ~5 min (fast model); loop self-terminated;
+results re-derived from on-disk logs, answers 42/52/62 verified everywhere.
+
+**State:** no stray listeners/processes/tmux; user's tmux session untouched; warmup
+cache holds the Ling-mini chain; arc synced at b7f3cd0 (wrap-up commit local on top);
+`fork/main` doc chain through 8605806. Queue head: Qwen3-30B-A3B.
