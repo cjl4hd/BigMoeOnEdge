@@ -6,62 +6,64 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-20 (session 11). Phase: bench campaign — SIX models
-published (Ornith, Cyber-Tiel, LFM2.5, Laguna, Ling-mini, Qwen3-30B); queue head
-Qwen3.6-35B-A3B. Upstream: #29085 READY FOR REVIEW.*
-*One-line status: #29085 flipped ready-for-review (full ggml CI running on GitHub;
-local CI already green, body template-compliant with both boxes checked; REST PATCH
-for body edits — `gh pr edit` broken on ggml-org). Arc pushed through the session-10
-addendum. Qwen3-30B-A3B batch measured + published (`091ea05`): third plain-
-transformer MoE, matrix's heaviest thinker (MAXTOK ladder needed 768), streaming
-+47% with prefill HALVED (a thrashes at 340 majflt/tok). Nemotron-H/H_MOE budget gap:
-upstream issue is the user's to post (draft ready). `docs/MISTAKES.md` created
-(pkill self-match lesson, 3× cost this session). Session-10 details in history.*## State delta (this session)
+*Resume last rewritten: 2026-09-20 (session 12). Phase: bench campaign — SEVEN models
+published (Ornith, Cyber-Tiel, LFM2.5, Laguna, Ling-mini, Qwen3-30B, Qwen3.6); queue
+head OLMoE-1B-7B (last in queue). Upstream: #29085 READY FOR REVIEW — user monitors CI.*
+*One-line status: session-11 wrap-up pushed. Qwen3.6-35B batch measured + published
+(`d24f55e`): third `qwen35moe` hybrid, matrix's deepest thrash (533 → 3.7 majflt/tok,
+~145×) and third arch where streaming speeds up prefill too (+43% decode, 1.7×
+prefill). TWO new mechanism finds: (1) `--auto-echo` ENGAGED but NEVER reconciled on
+Qwen3.6 — payloads ballooned 52→350, reuse 0 everywhere; the echo reconcile is
+template-sensitive, not arch-sensitive (same family as Cyber-Tiel where it works);
+first model where echo costs prefill and buys nothing. (2) First live rewind refusal:
+T2 divergence needed depth 135 > 64 planes (a heavy thinker's whole turn), engine
+refused honestly → full clear ≡ c4; warmup+rs-seq composition still worked at T1
+(2/22). Post-publish audit: 6/6 ratios verified, no slips. Session-11 details in
+history.*## State delta (this session)
 
-- **#29085 marked ready for review** (`gh pr ready 29085 --repo ggml-org/llama.cpp`;
-  REST `-F draft=false` is silently ignored — the GraphQL mutation is the only way).
-  State: `draft=false`, open; full CI running on GitHub; local CI already green
-  (session-10 addendum); body carries both checked boxes. Watch CI + the bot re-scan
-  (REST: `gh api repos/ggml-org/llama.cpp/pulls/29085 --jq ...`; `gh pr view` may hit
-  the Projects-classic deprecation).
-- **Arc pushed** `b7f3cd0..9624b13`; gate 1 re-run green (stash → clean pin build →
-  ctest → pop; port restored).
-- **Qwen3-30B-A3B full batch — published `091ea05` on fork/main:**
-  (a) 2.44 tok/s, **340.4 majflt/tok** (thrash), load 117.7 s, prefill 44.5 s;
-  (b) **3.59 tok/s (+47%)**, 1.91 majflt/tok, 93.4% hit, 40.3 MiB/tok, prefill **22.1 s
-  (halved)** — second arch (after Laguna) where streaming speeds up prefill too;
-  (c1) native reuse from the FIRST follow-up (T2 28/22, T3 28/50) — no echo, no
-  reconcile turn, unlike the qwen35-family hybrids; (c2) warmup T1 24.3 → 1.23 s
-  (~20×); (c3) auto-echo verified no-op; (c4) divergence free partial chop 28/22 with
-  rs-seq OFF; (c5) ≡ c4 — third transformer confirmation. Answers 42/52/62 (c4/c5:
-  42/62) verified from r*.json.
-- **MAXTOK ladder rung discovered: 768.** 192 and 384 both truncated Qwen3-30B's r1
-  think span (empty content, `verdict: FAIL` by design — 1313 chars of coherent
-  reasoning at 384, still cut). Heaviest thinker in the matrix; Laguna needed 384.
-  Protocol note recorded in-doc: c1 is the only warmup-off cell — c2–c5 all replay
-  warmup, so their T1 rows (1/21) are composition rows, not baselines.
-- **`docs/MISTAKES.md` created** (trigger: 3× same failure class): `pkill -f
-  <pattern>` matches the calling shell's own cmdline and kills the rest of the
-  compound command — the swallowed-tail failures that cost ~30 min. Rule: bracketed
-  patterns (`pkill -f "[c]ellc.sh"`) or a standalone kill + post-assert; never chain
-  `pkill -f X` with follow-ups.
-- **Nemotron-H/H_MOE budget gap**: issue NOT posted — user posts it themselves
-  (AI-content rule); draft ready at `/tmp/nemotron-budget-issue-draft.md`.
+- **Arc pushed at session start (user request):** `9624b13..dd43788` (session-11
+  wrap-up); this session's wrap-up goes on top locally per convention.
+- **Qwen3.6-35B-A3B full batch — published `d24f55e` on fork/main:** arch
+  `qwen35moe`, 22.1 GB (largest in the matrix, ~2× RAM). (a) 1.43 tok/s,
+  **533.0 majflt/tok** (deepest thrash measured), load 93.2 s, prefill 31.9 s;
+  (b) **2.05 tok/s (+43%)**, 3.68 majflt/tok (**~145× collapse**), 87.4% hit,
+  53.9 MiB/tok, prefill **19.0 s (1.7×)** — third arch with streaming prefill wins;
+  (c1) 24/0 → 52/0 → 80/0 (qwen35 full-clear shape); (c2) warmup T1 17.9 → 13.2 s
+  (~1.4×, no reuse — hybrid clear-block); (c3) **echo engaged, reuse 0** (NEW);
+  (c4) divergence 52/0; (c5) T1 **2/22 composed at 2.6 s**, T2 **rewind REFUSED**
+  (NEW). MAXTOK=192 sufficed (r1 think span 419 chars — lighter thinker than
+  Qwen3-30B's 1313). Answers 42/52/62 verified from r*.json.
+- **FINDING 1 — echo reconcile is template-sensitive, not arch-sensitive:** c3's
+  auto-echo rewrite is visibly in the payloads (prompts 52 → 185 → 350) yet
+  `n_reused` stays 0 at every turn, while Cyber-Tiel (SAME `qwen35moe` arch, different
+  chat template) reuses from T3. First matrix model where echo costs prefill and buys
+  nothing. Lesson: check the first follow-up's `n_reused` on any new template before
+  trusting echo.
+- **FINDING 2 — first live rewind refusal (the documented worst case, observed):**
+  `seq_rm: rollback refused: seq=0 depth=135 pending=0 want_idx=2 epoch_end=23
+  epoch_planes=2 epoch_lo=0` — Qwen3.6's T2 divergence must rewind past its whole T1
+  turn (~105-token think span + reply), and the 64-plane budget cannot reach; the
+  engine refuses honestly and full-clears (52/0 ≡ c4; the refused attempt costs ~6 s:
+  T2 prefill 21.9 vs 15.5 s). Correctness never at risk. Corollary: snapshot budgets
+  bound TURN DEPTH, not context — a heavy thinker's single turn can exceed any
+  affordable budget; `--rs-seq` still bought the warmup composition (T1 2/22 at
+  2.6 s vs c2's 13.2 s).
+- **Audit clean:** all six published ratios recomputed from raw CSVs/logs (43.2%→43%,
+  144.8×→~145×, 1.68×→1.7×, 53.9 exact, 6.4 s→~6 s, 1.36×→~1.4×); refusal line
+  verified verbatim in `server-c5.log`.
 
 ## Artifacts touched (this session)
 
 | File | What |
 |---|---|
-| `scripts/host-bench-q30-c1c5.patch` | the Qwen3-30B rows + summary/README fold-in diff published as 091ea05 |
-| `docs/MISTAKES.md` | NEW mistake log — pkill self-match entry |
-| `PROGRESS.md` | this rewrite + the session-11 history entry |
-| `cjl4hd:main` `091ea05` | published: Qwen3-30B section, summary/conclusions/recommendations updates, README perf column |
-| `.bench-report/Qwen3-30B-{a-baseline,A3B-Q4_K_M}.{csv,log}` | cells (a)/(b) raw evidence |
-| `/tmp/bench-q30/` | c-suite evidence: `run-c{1..5}.log`, `c{1..5}/{t,r}{1..3}.json`, server logs (regenerable by rerunning the cells) |
-| `/tmp/nemotron-budget-issue-draft.md` | DRAFT upstream issue — user reviews, owns, posts |
-| `/tmp/lp-verify/`, `~/git/lp-ci/` | kept from session 10 (mismatch repro runner; CI evidence — ~9 GB, removable after #29085 lands, keep `ci-results/`) |
+| `scripts/host-bench-q36-c1c5.patch` | the Qwen3.6 rows + summary/README fold-in diff published as d24f55e |
+| `PROGRESS.md` | this rewrite + the session-12 history entry |
+| `cjl4hd:main` `d24f55e` | published: Qwen3.6 section, summary/conclusions/recommendations updates, README perf column |
+| `.bench-report/Qwen3.6-35B-{a-baseline,A3B-UD-Q4_K_M}.{csv,log}` | cells (a)/(b) raw evidence |
+| `/tmp/bench-q36/` | c-suite evidence: `run-c{1..5}.log`, `c{1..5}/{t,r}{1..3}.json`, `server-c{1..5}.log` (regenerable by rerunning the cells) |
+| Kept from sessions 10–11 | `/tmp/lp-verify/` (mismatch runner), `~/git/lp-ci/` (~9 GB, removable after #29085 lands, keep `ci-results/`), `/tmp/nemotron-budget-issue-draft.md` (user's to post) |
 
-Arc state: `feat/session-residency` == `fork/feat/session-residency` at `9624b13`
+Arc state: `feat/session-residency` == `fork/feat/session-residency` at `dd43788`
 (pushed this session); the wrap-up commit below goes on top locally per the session-5
 convention — push is yours. The `core/src/engine/session.cpp` pos0 port stays
 working-tree-only — NEVER commit it; stash it for pin builds and the ctest gate.
@@ -110,16 +112,12 @@ Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` l
    fork main → rebase `feat/session-residency` (serve-bridge commits collapse) →
    `gh pr create --repo Helldez/BigMoeOnEdge --base main --head cjl4hd:feat/session-residency`.
    Fallback if #197 stalls: fork-internal PR (`--repo cjl4hd --base feat/serve-bridge-arm64`), retarget later.
-2. **PR #29085 — submission-ready, awaiting the user's ready-flip** (body
-   template-compliant as of this session; still a DRAFT by user choice; commit clean,
-   MERGEABLE, no rebase needed). `gh pr ready 29085 --repo ggml-org/llama.cpp` → full
-   CI + bot re-scan. After merge: reopen PR #29117 (humanize description first —
-   `/tmp/pr-index-shift-description-draft.md` is the tool draft, a starting point
-   only), then submodule bump + full byte-identity gates + `bmoe-rsbench reserve`
-   re-run (ADR-001 bump rule; the backtrace site differs pin↔master). If a reviewer
-   can't reproduce the assert on current master: the shortfall manifests
-   config-dependently at tip (see state delta) — the durable argument is the
-   classification fix + the new fixture coverage.
+2. **PR #29085 — READY FOR REVIEW; the user monitors CI.** When merged, the playbook
+   in Next actions 1 applies (reopen #29117 → submodule bump + full byte-identity
+   gates + `bmoe-rsbench reserve` re-run). If a reviewer can't reproduce the assert
+   on current master: the shortfall manifests config-dependently at tip (session-10
+   history) — the durable argument is the classification fix + the new fixture
+   coverage.
 3. **NEW — CPU multi-seq split-replay mismatch (real LFM2.5, max diff 11.587):**
    pre-existing, out of #29085 scope, our single-seq engine paths unaffected. Next:
    narrow the repro (other real allowlist archs on CPU? a non-lean build? dummy-only
@@ -132,37 +130,38 @@ Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` l
 
 ## Next actions (ordered)
 
-1. **Watch #29085 CI + bot re-scan** (now READY FOR REVIEW; local CI already green):
-   `gh api repos/ggml-org/llama.cpp/pulls/29085 --jq '{state, merged, draft}'` and the
-   comments timeline for the bot; body edits via REST PATCH from
-   `/tmp/pr-29085-body.md` (gh pr edit broken — see Environment). When merged:
-   reopen PR #29117 (humanize first — `/tmp/pr-index-shift-description-draft.md` is
-   the tool draft), then submodule bump + full byte-identity gates + `bmoe-rsbench
-   reserve` re-run (ADR-001 bump rule). Watch #28976 (WebGPU GDN) for the
-   snapshot-slot contract. When #197 merges: the stacked-PR plan (Open questions 1).
-   After the PR lands: free ~9 GB — `git worktree remove --force ~/git/lp-ci` (keep
-   `ci-results/` logs).
+1. **#29085 is READY FOR REVIEW — the user monitors its CI** (do not poll it
+   proactively). When it merges: reopen PR #29117 (humanize first —
+   `/tmp/pr-index-shift-description-draft.md` is the tool draft), then submodule bump
+   + full byte-identity gates + `bmoe-rsbench reserve` re-run (ADR-001 bump rule).
+   Watch #28976 (WebGPU GDN) for the snapshot-slot contract. When #197 merges: the
+   stacked-PR plan (Open questions 1). After the PR lands: free ~9 GB —
+   `git worktree remove --force ~/git/lp-ci` (keep `ci-results/` logs).
 2. **User: post the Nemotron-H/H_MOE issue** from `/tmp/nemotron-budget-issue-draft.md`
    (own wording; AI-content rule). Record the issue number here when posted.
-3. **Continue the bench batch — Qwen3.6-35B-A3B next** (Qwen3-30B done), then OLMoE.
-   Likely `qwen35moe`-family: expect the echo-reconcile shape (T2 full-clear, T3+ rides)
-   and hybrid full-clears on divergence (c5 budget 64 per the OOM law). Per model:
-   (a) direct pin-build CLI run — NOT `bench-report.sh`, which hardcodes the streaming
-   stack and is cell (b) — same protocol minus the streaming flags; (b)
-   `scripts/bench-report.sh`; (c1–c3) `cellc.sh` (MAXTOK: start 192 and ladder from the
-   r1/r2 reasoning lengths — Laguna needed 384, Qwen3-30B needed 768; empty content +
-   `verdict: FAIL` = budget truncation, not a bug); (c4/c5) divergence cells; run the
-   c-suite in ONE detached tmux loop, 3 positional args (MODEL OUTDIR CELL),
-   `mkdir -p` the OUTDIR first. Publish via `scripts/publish-host-bench.sh`, fold into
+3. **Finish the bench queue — OLMoE-1B-7B last** (Qwen3.6 done, seven published).
+   Small 1B-7B MoE: check size + arch first (`arch=` from the (a) log; likely
+   `olmoe`) and think behavior — expect a fits-RAM profile (LFM2.5/Ling-mini class:
+   streaming may LOSE) unless its cache footprint tips it over. Per model: (a) direct
+   pin-build CLI run — NOT `bench-report.sh`, which hardcodes the streaming stack and
+   is cell (b) — same protocol minus the streaming flags; (b) `bench-report.sh`;
+   (c1–c3) `cellc.sh` (3 positional args, `mkdir -p` OUTDIR first; MAXTOK start 192
+   and ladder from the r1 reasoning length — Laguna 384, Qwen3-30B 768; empty content
+   + FAIL = truncation); (c4/c5) divergence cells — c5 budget 64 per the OOM law, and
+   READ THE `depth=` LINE on any refusal (Qwen3.6 lesson: a heavy thinker's turn can
+   exceed the budget; the refusal is the documented worst case, not a bug). Check the
+   first follow-up's `n_reused` before trusting echo on a new template (qwen36
+   lesson). Publish via `scripts/publish-host-bench.sh`, fold into
    Summary/Conclusions/Recommendations + README. **Audit rule (five catches):** every
    number, ratio, and unit conversion (MiB→GiB!) from the run's own CSV/log.
 4. **Kill-process rule (docs/MISTAKES.md):** never chain `pkill -f <pat>` with
    follow-up statements — bracket the pattern (`pkill -f "[c]ellc.sh"`) or run it
    standalone and assert afterwards.
-5. **After the batch: refresh the evidence tables** — `docs/benchmarks.md`/`docs/serve.md`
-   gain host rows; README feature tables refreshed at every wrap-up (rule 6 lives
-   there). Then: Ling-mini edit-turn reuse with captured aider payloads; opencode
-   re-test with `--auto-echo` on LFM2.5; daily driver back on :8017 when benching ends.
+5. **After the queue completes: refresh the evidence tables** —
+   `docs/benchmarks.md`/`docs/serve.md` gain host rows; README feature tables
+   refreshed at every wrap-up (rule 6 lives there). Then: Ling-mini edit-turn reuse
+   with captured aider payloads; opencode re-test with `--auto-echo` on LFM2.5; daily
+   driver back on :8017 when benching ends.
 
 ## Resume gates (all must assert positives)
 
@@ -941,3 +940,47 @@ head Qwen3.6-35B-A3B, then OLMoE-1B-7B.
   any log. PR body updated with both checked boxes (template boilerplate, backed by
   the run). Evidence: `~/git/lp-ci/ci-results/*.log` (~9 GB worktree incl. models-mnt
   — removable after the PR lands, keep the logs).
+
+## 2026-09-20 — Session 12: Qwen3.6 batch; echo-reconcile is template-sensitive; first live rewind refusal
+
+User: "Lets push the wrap up. Then continue next model batch. No need to check PR CI,
+as I'm monitoring that."
+
+- **Arc pushed** `9624b13..dd43788` (session-11 wrap-up).
+- **Qwen3.6-35B-A3B batch (arch `qwen35moe`, 22.1 GB UD-Q4_K_M — largest in the
+  matrix, ~2× host RAM):**
+  - Cells (a)+(b) via the two-cell tmux runner: (a) 1.43 tok/s, **533.0 majflt/tok**
+    (deepest thrash measured), load 93.2 s, prefill 31.94 s; (b) **2.05 tok/s
+    (+43%)**, 3.68 majflt/tok (~145× collapse), 87.4% hit, 13798.3 MiB = 53.9/tok,
+    prefill 18.96 s (1.7×) — **third arch where streaming speeds up prefill too**
+    (after Laguna, Qwen3-30B; the ~2×-RAM baseline thrashes its prefill as well).
+  - c-suite at MAXTOK=192 first try (r1 think span 419 chars — lighter thinker than
+    Qwen3-30B's 1313): all five cells `verdict: ok`, answers 42/52/62 (c4/c5: 42/62)
+    verified from `c*/r*.json`.
+  - **FINDING 1 — echo reconcile is template-sensitive, not arch-sensitive:** c3's
+    auto-echo ENGAGED (prompts balloon 52 → 185 → 350 — the rewrite is in the
+    payloads) yet `n_reused` stays 0 everywhere, while Cyber-Tiel (SAME `qwen35moe`
+    arch) reuses from T3. Different chat template ⇒ different render ⇒ no reconcile.
+    First matrix model where echo costs prefill and buys nothing. Lesson: check the
+    first follow-up's `n_reused` on any new template before trusting echo.
+  - **FINDING 2 — first live rewind refusal:** c5 T2
+    `seq_rm: rollback refused: seq=0 depth=135 pending=0 want_idx=2 epoch_end=23
+    epoch_planes=2 epoch_lo=0` — the divergence must rewind past Qwen3.6's whole T1
+    turn (~105-token think span + reply) and 64 planes cannot reach; engine refuses
+    honestly → full clear (52/0 ≡ c4; refused attempt costs ~6.4 s: T2 prefill 21.9
+    vs 15.5 s). c5 T1 still composed warmup+snapshots (2/22 at 2.6 s vs c2's 13.2 s).
+    Corollary: snapshot budgets bound TURN DEPTH, not context; a heavy thinker's
+    single turn can exceed any affordable budget — read the `depth=` line before
+    assuming coverage.
+  - Published `d24f55e` on fork/main via the publisher (section + queue line →
+    OLMoE only + summary/conclusions/recommendations + README: three rows updated).
+    Post-publish audit: 6/6 ratios recomputed from raw evidence, all match; refusal
+    line verbatim in `server-c5.log` — no slips.
+- **Protocol updates for the queue's last model (OLMoE-1B-7B):** read `depth=` on
+  refusals; check first-follow-up `n_reused` before trusting echo; c-suite launch =
+  3 positional args + `mkdir -p` OUTDIR first (session-11 lessons, now in Next
+  actions 3).
+
+**State:** gates green at wrap-up; no listeners/engine procs; only the user's tmux
+session ("0") alive; arc `dd43788` (+ this wrap-up local, push is yours); fork/main
+through `d24f55e` carrying all SEVEN models' rows; queue head OLMoE-1B-7B (last).
