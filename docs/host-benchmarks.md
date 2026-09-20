@@ -25,19 +25,22 @@ branches until #197 merges — the cell (c) rows were measured from the arc tree
 
 ## Summary, conclusions, recommendations
 
-**Summary.** Seven models measured end to end across five cells each: three 35B-class MoE
+**Summary.** Eight models measured end to end across five cells each: three 35B-class MoE
 hybrids ~2× host RAM (Qwen3.5-family: Ornith 1.5, Cyber-Tiel-Coder, Qwen3.6), one 8B
-hybrid that fits RAM comfortably (LFM2.5), and three plain-transformer MoEs (Laguna-XS,
-18.9 GB; Qwen3-30B-A3B, 18.6 GB — both ~2× RAM; Ling-mini-2.0, 9.9 GB barely fitting).
+hybrid that fits RAM comfortably (LFM2.5), and four plain-transformer MoEs (Laguna-XS,
+18.9 GB; Qwen3-30B-A3B, 18.6 GB — both ~2× RAM; Ling-mini-2.0, 9.9 GB barely fitting;
+OLMoE-1B-7B, 4.0 GB comfortably).
 Where the model is past RAM, streaming (a → b) roughly doubles decode (1.39 → 2.06,
 1.29 → 2.19, 1.37 → 1.95, 2.44 → 3.59, 1.43 → 2.05 tok/s) while major faults collapse
 (470 → 129, 616 → 72, 642 → 65, 340 → 1.9, 533 → 3.7 per token): the mmap baseline
 thrashes, the streamed run reads — and on Laguna, Qwen3-30B and Qwen3.6 prefill speeds
 up too (47.5 → 34.1, 44.5 → 22.1, 31.9 → 19.0 s), since a ~2×-RAM baseline thrashes its
 prefill as well. Where the model fits, streaming
-loses: −11% decode on LFM2.5 (0 faults both ways) and −31% on Ling-mini, where the
-streaming stack's own cache (7.5 GiB) pushed a 9.9 GB model into swap (0.86 → 19.3
-faults/token) — the cache became the memory pressure. The (b) stack is a tool for memory
+loses: −11% decode on LFM2.5 (0 faults both ways), −6% on OLMoE (its 3.7 GiB cache
+coexists with the 4 GB model), and −31% on Ling-mini, where the streaming stack's own
+cache (7.5 GiB) pushed a 9.9 GB model into swap (0.86 → 19.3 faults/token) — the cache
+became the memory pressure. The fits-RAM verdict is set by the model-plus-cache sum,
+not the model alone. The (b) stack is a tool for memory
 pressure, not a default. Session residency (c rows) removes most of the per-turn prefill:
 append reuse with `--auto-echo` reuses 22–310 tokens per follow-up turn (prefill to
 ~1 s), and snapshot rollback (`--rs-seq 64`) turns a hybrid's worst case — a divergence
@@ -89,8 +92,8 @@ thinker — its c-suite needed MAXTOK=768; 192/384 truncated its think spans): p
 clients already reuse, and the rewrite itself costs a reconcile turn. A non-thinking model (Ling-mini) has nothing
   to echo: reuse is native and `--auto-echo` is a verified no-op.
 - The divergence tax is a hybrid phenomenon, not a universal one. The plain-transformer
-  MoEs reuse 55 (Laguna), 34 (Ling-mini) and 22 (Qwen3-30B) tokens on the divergence
-  turn with rs-seq OFF — the generic diff path chops freely — while every hybrid
+  MoEs reuse 55 (Laguna), 34 (Ling-mini), 22 (Qwen3-30B) and 34 (OLMoE) tokens on the
+divergence turn with rs-seq OFF — the generic diff path chops freely — while every hybrid
   full-clears the same shape. `--rs-seq` matters exactly on the archs that cannot rewind without snapshots.
 - Every reuse zero in the matrix is either a designed full clear or a structural
   template/echo mismatch — never a wrong answer. All cell answers are verified (42/52/62;
@@ -110,7 +113,7 @@ clients already reuse, and the rewrite itself costs a reconcile turn. A non-thin
   on LFM2.5-class templates; after one reconcile turn on the qwen35 family; on
   laguna/qwen3moe-class templates (native history-reasoning rendering) leave
   `--auto-echo` off — plain history already reuses and the echo rewrite costs a turn;
-  on non-thinking models it is a no-op; on Qwen3.6 the rewrite engaged but never
+  on non-thinking models (Ling-mini, OLMoE) it is a no-op; on Qwen3.6 the rewrite engaged but never
   reconciled — verify the first follow-up's `n_reused` before trusting echo on a new
   template). Divergence-shaped
   turns (aider edit turns, clients that drop reasoning) still full-clear on hybrids
@@ -122,9 +125,11 @@ clients already reuse, and the rewrite itself costs a reconcile turn. A non-thin
   longest turn you must rewind past: Qwen3.6's single turn needed 135 planes, so 64
   bought only the warmup composition there — check a refused rollback's `depth=` line
   before assuming the budget covers a heavy thinker.
-- Do not expect streaming to speed up *prefill* on MoE: prefill routes nearly all experts,
-  so there is nothing to skip (cell b prefill 68.3 s vs a's 61.8 s on the coder). The
-  streaming win is decode throughput and stability.
+- Prefill rarely speeds up under streaming: prefill routes nearly all experts, so there
+  is nothing to skip (cell b prefill 68.3 s vs a's 61.8 s on the coder). The exception
+  is the ~2×-RAM regime, where the mmap baseline thrashes its prefill too and
+  streaming's bounded reads win (Laguna 47.5 → 34.1 s, Qwen3-30B 44.5 → 22.1, Qwen3.6
+  31.9 → 19.0). The streaming win is decode throughput and stability.
 
 ## Ornith 1.5-35B (Qwen3.5-family MoE, 20.2 GB, ~2× host RAM)
 
@@ -393,4 +398,37 @@ Reading the cells:
   reasoning headroom and per-request overhead are included there (same caveat as
   Ornith).
 
-Queued next: OLMoE-1B-7B.
+## OLMoE-1B-7B (arch `olmoe`, MoE, 4.0 GB, fits host RAM comfortably — completes the fits-RAM trio)
+
+Fourth plain-transformer MoE in the matrix and its last queued model: `olmoe` is on
+neither the hybrid nor the snapshot-rollback arch lists (verified in llama-arch.cpp),
+and the behavior below matches. Non-thinking model — r1 is a plain sentence with no
+reasoning span.
+
+| Cell | Engine commit | load s | prefill s | tok/s | flash/token | cache hit | majflt/tok |
+|---|---|---:|---:|---:|---:|---:|---:|
+| a) mmap baseline | arc `dd43788` | 8.2 | 1.67 | **10.75** | — | — | 0.00 |
+| b) bmoe streaming | arc `dd43788` | 1.8 | 7.81 | 10.13 | 2.3 MiB | 97.0% | 0.00 |
+| c) warmup off (c1) | `bench/host-rs@2a8d47ac9` | — | 6.6 (T1) | 5.4–11.9 | T2: 26 prompt / 34 reused; T3: 26 prompt / 69 reused | — | — |
+| c) warmup on (c2) | `bench/host-rs@2a8d47ac9` | — | **0.12 (T1, ~56×)** | 8.1–9.8 | T2: 26 prompt / 36 reused; T3: 26 prompt / 74 reused | — | — |
+| c) warmup + auto-echo (c3) | `bench/host-rs@2a8d47ac9` | — | 0.10 (T1) | 11.2–11.9 | T2: 26 / 36; T3: 26 / 74 — ≡ c2 (no-op) | — | — |
+| c4) divergence, rs-seq off | `bench/host-rs@2a8d47ac9` | — | 6.9 / 0.99 (T1/T2) | 6.3 / 11.5 | T2: 26 prompt / 34 reused | — | — |
+| c5) divergence, rs-seq 64 | `bench/host-rs@2a8d47ac9` | — | 0.07 / 0.94 (T1/T2) | 10.1 / 12.6 | T1: 1 prompt / 24 reused; T2: 26 / 34 — ≡ c4 (pool unused) | — | — |
+
+Reading the cells:
+
+- **(a) → (b)**: the mildest fits-RAM penalty in the matrix (−6% decode, 10.75 →
+  10.13 tok/s) with **zero faults in both cells**: the 3.7 GiB expert cache coexists
+  with the 4 GB model without pushing anything into swap. Compare Ling-mini, where the
+  same cache pushed a 9.9 GB model into swap (0.86 → 19.3 faults/token): the fits-RAM
+  verdict is set by the **model-plus-cache sum**, not the model alone.
+- **(c) suite, fourth plain transformer, non-thinking**: native reuse from the first
+  follow-up (T2 26/34, T3 26/69 at ~1 s prefill), `--auto-echo` a verified no-op
+  (c3 ≡ c2 — nothing to echo), divergence a free partial chop (c4 26/34 with rs-seq
+  OFF), c5 ≡ c4 (snapshot pool unused), and warmup composing freely at **~56×** — the
+  largest warmup ratio in the matrix (6.6 s → 0.12 s; the whole conversation reuses
+  natively, so the replayed prefix is almost entirely recoverable).
+- Answers verified 42/52/62 in every cell.
+
+Queued next: none — the eight-model host queue is complete; see the Summary for the
+cross-model picture.
