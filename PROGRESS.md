@@ -6,57 +6,54 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-20 (session 13). Phase: **host bench campaign
-COMPLETE** — all EIGHT queue models published (Ornith, Cyber-Tiel, LFM2.5, Laguna,
-Ling-mini, Qwen3-30B, Qwen3.6, OLMoE); fork/main carries the full matrix. Upstream:
-#29085 READY FOR REVIEW — user monitors CI.*
-*One-line status: session-12 wrap-up pushed (`dd43788..1094910`). OLMoE-1B-7B batch
-measured + published (`632fdf7`): fourth plain transformer, mildest fits-RAM penalty
-(−6% decode, zero faults BOTH cells — the 3.7 GiB cache coexists with the 4 GB model),
-warmup ~56× (largest in the matrix — native reuse makes the whole replayed prefix
-recoverable), auto-echo a no-op (non-thinking), c5 ≡ c4. Audit 4/4 clean. Queue
-closed. Swap resize to 8G: sudo commands handed to the user, still pending (4G/3G
-used at wrap-up).*## State delta (this session)
+*Resume last rewritten: 2026-09-20 (session 14). Phase: **host bench campaign
+COMPLETE + evidence docs refreshed** — all EIGHT queue models published; the host
+campaign's protocol lessons are folded into `docs/benchmark-method.md` and
+`docs/session.md` (`eb8ec6a` on fork/main). Upstream: #29085 READY FOR REVIEW —
+user monitors CI.*
+*One-line status: session-13 wrap-up push verified (`c6db52b` on fork — the earlier
+exit-1 was pipe noise). Published `eb8ec6a`: benchmark-method gained "The host
+campaign" (matrix scope + MAXTOK ladder, echo first-follow-up `n_reused` check,
+`depth=` on refusals); session.md's thinking-turn fallback gained the
+template-sensitivity refinement. `docs/benchmarks.md` confirmed Android-scoped;
+`docs/serve.md` does not exist (stale next-action). Swap resize still pending on
+the user's sudo.*
 
-- **Arc pushed** `dd43788..1094910` (session-12 wrap-up) at session start.
+## State delta (this session)
+
+- **Session-13 wrap-up push verified:** `c6db52b` is on `fork/feat/session-residency`
+  (the previous attempt's exit-1 was pipe noise; ancestry clean).
 - **Swap task (unrelated, user request):** diagnosed current state (`/swap.img` 4G,
   80% full; stale fstab line for a nonexistent `/swapfile_extra`) and handed the user
   the sudo commands for a permanent 8G swapfile. NOT yet executed — swap still 4G
   (3.0G used) at wrap-up; record here when done.
-- **OLMoE-1B-7B batch — published `632fdf7`, the queue's last model:** arch
-  `olmoe`, 4.0 GB, non-thinking, fourth plain transformer (absent from both the
-  hybrid and rollback lists — verified in the pin's llama-arch.cpp; behavior
-  matches). (a) **10.75 tok/s**, 0 majflt/tok, load 8.2 s, prefill 1.67 s; (b)
-  10.13 tok/s (−6%, mildest fits-RAM penalty yet), 0 majflt BOTH cells, 97.0% hit,
-  2.3 MiB/tok, prefill 7.81 s; (c1) native reuse from the first follow-up (T2 26/34,
-  T3 26/69); (c2) warmup T1 6.6 → **0.12 s (~56×)** — largest warmup ratio measured
-  (non-thinking + native reuse ⇒ the whole replayed prefix is recoverable); (c3) ≡
-  c2 (echo no-op); (c4) free chop 26/34; (c5) ≡ c4 (pool unused). Answers
-  42/52/62 verified in every cell.
-- **Fits-RAM law refined (published):** the verdict is set by the **model-plus-cache
-  sum**, not the model alone — OLMoE (4 GB + 3.7 GiB cache) pays −6% with zero faults
-  while Ling-mini (9.9 GB + 7.5 GiB cache) pays −31% in swap.
-- **Audit clean:** −5.8%→−6%, 2.35→2.3 MiB, 56.3×→~56×, prefill 40/5.12=7.81 s —
-  all recomputed from raw CSVs/logs. One near-miss caught BEFORE publish: README
-  model-count "six" → "seven" on the reuse row.
-- **Queue closed:** eight models, complete cross-arch matrix (3 qwen35moe hybrids ~2×
-  RAM, 1 LFM hybrid fits-RAM, 4 plain transformers spanning 4→19 GB). Next work is
-  the post-queue list (Next actions), not new models.
+- **Evidence tables refreshed — published `eb8ec6a` on fork/main:** target audit
+  first — `docs/benchmarks.md` is the ANDROID matrix (host rows belong in
+  `docs/host-benchmarks.md`, which already has them), `docs/serve.md` does not
+  exist; real targets were `docs/benchmark-method.md` + `docs/session.md`.
+  benchmark-method gains **"The host campaign"** under "Where the published numbers
+  come from": the eight-model scope plus the three protocol rules (MAXTOK laddering
+  per model, echo first-follow-up `n_reused` check, `depth=` reading on rewind
+  refusals) so the session-12/13 lessons outlive the sessions. session.md's
+  thinking-turn fallback paragraph gains the template-sensitivity refinement (same
+  arch family, opposite echo-reconcile outcomes) + host-benchmarks cross-link.
+- **Swap task:** unchanged — sudo commands are with the user, still pending (4G,
+  ~3G used).
+- (Session-13 details — OLMoE batch, fits-RAM law, audit — live in the session-13
+  history entry; the queue stays CLOSED.)
 
 ## Artifacts touched (this session)
 
 | File | What |
 |---|---|
-| `scripts/host-bench-olmoe-c1c5.patch` | the OLMoE rows + summary/README fold-in diff published as 632fdf7 |
-| `PROGRESS.md` | this rewrite + the session-13 history entry |
-| `cjl4hd:main` `632fdf7` | published: OLMoE section, queue-closure line, summary/recommendations updates, README perf column |
-| `.bench-report/olmoe-{a-baseline,1b-7b-0924-instruct-q4_k_m}.{csv,log}` | cells (a)/(b) raw evidence |
-| `/tmp/bench-olmoe/` | c-suite evidence: `run-c{1..5}.log`, `c{1..5}/{t,r}{1..3}.json` (regenerable by rerunning the cells) |
+| `scripts/host-bench-evidence-tables.patch` | the benchmark-method/session.md fold-in diff published as eb8ec6a |
+| `PROGRESS.md` | this rewrite + the session-14 history entry |
+| `cjl4hd:main` `eb8ec6a` | published: benchmark-method "The host campaign" + session.md template-sensitivity refinement |
 | Kept | `/tmp/lp-verify/` (mismatch runner), `~/git/lp-ci/` (~9 GB, removable after #29085 lands), `/tmp/nemotron-budget-issue-draft.md` (user's to post) |
 
-Arc state: `feat/session-residency` == `fork/feat/session-residency` at `1094910`
-(pushed this session); the wrap-up commit below goes on top locally per the session-5
-convention — push is yours. The `core/src/engine/session.cpp` pos0 port stays
+Arc state: `feat/session-residency` == `fork/feat/session-residency` at `c6db52b`
+(verified this session); the session-14 record commit goes on top and is pushed at
+wrap-up. The `core/src/engine/session.cpp` pos0 port stays
 working-tree-only — NEVER commit it; stash it for pin builds and the ctest gate.
 Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` links);
 `fix/lfm2-rs-reserve` @ `74e1ee6de` = the #29085 branch (READY FOR REVIEW);
@@ -130,21 +127,17 @@ Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` l
    `git worktree remove --force ~/git/lp-ci` (keep `ci-results/` logs).
 2. **User: post the Nemotron-H/H_MOE issue** from `/tmp/nemotron-budget-issue-draft.md`
    (own wording; AI-content rule). Record the issue number here when posted.
-3. **Bench queue COMPLETE — post-queue work:** (a) refresh `docs/benchmarks.md` /
-   `docs/serve.md` with the eight-model host matrix; (b) Ling-mini edit-turn reuse
-   with captured aider payloads; (c) opencode re-test with `--auto-echo` on LFM2.5;
-   (d) daily driver back on :8017 when benching ends; (e) README feature tables
-   refreshed at every wrap-up (rule 6 lives there). If new models arrive later, the
-   per-model protocol lives in the session-12/13 history entries (MAXTOK ladder,
-   echo first-follow-up check, `depth=` on refusals, 3-arg cellc + mkdir OUTDIR).
+3. **Bench queue COMPLETE — post-queue work:** (a) ~~docs refresh~~ DONE
+   (`eb8ec6a`); (b) Ling-mini edit-turn reuse with captured aider payloads;
+   (c) opencode re-test with `--auto-echo` on LFM2.5; (d) daily driver back on :8017
+   when benching ends; (e) README feature tables refreshed at every wrap-up (rule 6
+   lives there). If new models arrive later, the per-model protocol now also lives
+   in `docs/benchmark-method.md` §"The host campaign" (MAXTOK ladder, echo
+   first-follow-up check, `depth=` on refusals, 3-arg cellc + mkdir OUTDIR).
 4. **Kill-process rule (docs/MISTAKES.md):** never chain `pkill -f <pat>` with
    follow-up statements — bracket the pattern (`pkill -f "[c]ellc.sh"`) or run it
    standalone and assert afterwards.
-5. **After the queue completes: refresh the evidence tables** —
-   `docs/benchmarks.md`/`docs/serve.md` gain host rows; README feature tables
-   refreshed at every wrap-up (rule 6 lives there). Then: Ling-mini edit-turn reuse
-   with captured aider payloads; opencode re-test with `--auto-echo` on LFM2.5; daily
-   driver back on :8017 when benching ends.
+
 
 ## Resume gates (all must assert positives)
 
@@ -1004,3 +997,36 @@ continue with suggested followups."
 **State:** gates green at wrap-up; environment clean; arc `1094910` (+ this wrap-up
 local, push is yours); fork/main through `632fdf7` carrying all EIGHT models' rows;
 swap resize pending on the user's sudo.
+
+## Session 14 — 2026-09-20: evidence tables refreshed (`eb8ec6a`); wrap-up push verified
+
+- **Push verified:** `c6db52b` confirmed on `fork/feat/session-residency` — the
+  previous turn's exit-1 was pipe noise, ancestry was clean.
+- **Target audit before editing:** the queued next-action named
+  `docs/benchmarks.md`/`docs/serve.md` — both stale. `docs/benchmarks.md` is the
+  ANDROID device matrix (its Provenance section says so; host rows already live in
+  the dedicated `docs/host-benchmarks.md`), and `docs/serve.md` does not exist.
+  Real refresh targets: `docs/benchmark-method.md` (the method doc) and
+  `docs/session.md` (bridge behavior).
+- **Published `eb8ec6a`** via the publisher (2 files, +25/−1):
+  - `docs/benchmark-method.md`: new subsection **"The host campaign"** under
+    "Where the published numbers come from" — the eight-model scope (3 qwen35moe
+    hybrids ~2× RAM, 1 LFM hybrid, 4 fits-RAM transformers) and the three
+    protocol rules generalized for future suites: MAXTOK laddered per model (a
+    FAIL may be a truncated think span — Qwen3-30B needed 768), echo
+    template-sensitivity (check the first follow-up's `n_reused`; same-family
+    archs diverged), and `depth=` reading on rewind refusals (the plane budget
+    bounds turn depth, not context).
+  - `docs/session.md`: the thinking-turn fallback paragraph now states that how
+    much reuse claws back is **template-sensitive, not arch-sensitive** (two
+    same-family archs diverged in the host matrix), with the host-benchmarks
+    cross-link.
+- **Not touched:** `docs/benchmarks.md` (Android-scoped, nothing falsified),
+  README (rows current through OLMoE). The session.cpp pos0 port flag in
+  `git status` is the known working-tree-only port, never committed.
+- **Environment:** clean (no serve listeners, no bench processes). Swap still 4G
+  (~3G used) — user's sudo pending.
+
+**State:** arc `c6db52b` pushed; the session-14 record commit goes on top and is
+pushed; fork/main through `eb8ec6a`; swap resize pending; Nemotron issue draft
+still with the user; #29085 with the user for CI monitoring.
