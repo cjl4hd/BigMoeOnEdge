@@ -6,64 +6,55 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-20 (session 12). Phase: bench campaign — SEVEN models
-published (Ornith, Cyber-Tiel, LFM2.5, Laguna, Ling-mini, Qwen3-30B, Qwen3.6); queue
-head OLMoE-1B-7B (last in queue). Upstream: #29085 READY FOR REVIEW — user monitors CI.*
-*One-line status: session-11 wrap-up pushed. Qwen3.6-35B batch measured + published
-(`d24f55e`): third `qwen35moe` hybrid, matrix's deepest thrash (533 → 3.7 majflt/tok,
-~145×) and third arch where streaming speeds up prefill too (+43% decode, 1.7×
-prefill). TWO new mechanism finds: (1) `--auto-echo` ENGAGED but NEVER reconciled on
-Qwen3.6 — payloads ballooned 52→350, reuse 0 everywhere; the echo reconcile is
-template-sensitive, not arch-sensitive (same family as Cyber-Tiel where it works);
-first model where echo costs prefill and buys nothing. (2) First live rewind refusal:
-T2 divergence needed depth 135 > 64 planes (a heavy thinker's whole turn), engine
-refused honestly → full clear ≡ c4; warmup+rs-seq composition still worked at T1
-(2/22). Post-publish audit: 6/6 ratios verified, no slips. Session-11 details in
-history.*## State delta (this session)
+*Resume last rewritten: 2026-09-20 (session 13). Phase: **host bench campaign
+COMPLETE** — all EIGHT queue models published (Ornith, Cyber-Tiel, LFM2.5, Laguna,
+Ling-mini, Qwen3-30B, Qwen3.6, OLMoE); fork/main carries the full matrix. Upstream:
+#29085 READY FOR REVIEW — user monitors CI.*
+*One-line status: session-12 wrap-up pushed (`dd43788..1094910`). OLMoE-1B-7B batch
+measured + published (`632fdf7`): fourth plain transformer, mildest fits-RAM penalty
+(−6% decode, zero faults BOTH cells — the 3.7 GiB cache coexists with the 4 GB model),
+warmup ~56× (largest in the matrix — native reuse makes the whole replayed prefix
+recoverable), auto-echo a no-op (non-thinking), c5 ≡ c4. Audit 4/4 clean. Queue
+closed. Swap resize to 8G: sudo commands handed to the user, still pending (4G/3G
+used at wrap-up).*## State delta (this session)
 
-- **Arc pushed at session start (user request):** `9624b13..dd43788` (session-11
-  wrap-up); this session's wrap-up goes on top locally per convention.
-- **Qwen3.6-35B-A3B full batch — published `d24f55e` on fork/main:** arch
-  `qwen35moe`, 22.1 GB (largest in the matrix, ~2× RAM). (a) 1.43 tok/s,
-  **533.0 majflt/tok** (deepest thrash measured), load 93.2 s, prefill 31.9 s;
-  (b) **2.05 tok/s (+43%)**, 3.68 majflt/tok (**~145× collapse**), 87.4% hit,
-  53.9 MiB/tok, prefill **19.0 s (1.7×)** — third arch with streaming prefill wins;
-  (c1) 24/0 → 52/0 → 80/0 (qwen35 full-clear shape); (c2) warmup T1 17.9 → 13.2 s
-  (~1.4×, no reuse — hybrid clear-block); (c3) **echo engaged, reuse 0** (NEW);
-  (c4) divergence 52/0; (c5) T1 **2/22 composed at 2.6 s**, T2 **rewind REFUSED**
-  (NEW). MAXTOK=192 sufficed (r1 think span 419 chars — lighter thinker than
-  Qwen3-30B's 1313). Answers 42/52/62 verified from r*.json.
-- **FINDING 1 — echo reconcile is template-sensitive, not arch-sensitive:** c3's
-  auto-echo rewrite is visibly in the payloads (prompts 52 → 185 → 350) yet
-  `n_reused` stays 0 at every turn, while Cyber-Tiel (SAME `qwen35moe` arch, different
-  chat template) reuses from T3. First matrix model where echo costs prefill and buys
-  nothing. Lesson: check the first follow-up's `n_reused` on any new template before
-  trusting echo.
-- **FINDING 2 — first live rewind refusal (the documented worst case, observed):**
-  `seq_rm: rollback refused: seq=0 depth=135 pending=0 want_idx=2 epoch_end=23
-  epoch_planes=2 epoch_lo=0` — Qwen3.6's T2 divergence must rewind past its whole T1
-  turn (~105-token think span + reply), and the 64-plane budget cannot reach; the
-  engine refuses honestly and full-clears (52/0 ≡ c4; the refused attempt costs ~6 s:
-  T2 prefill 21.9 vs 15.5 s). Correctness never at risk. Corollary: snapshot budgets
-  bound TURN DEPTH, not context — a heavy thinker's single turn can exceed any
-  affordable budget; `--rs-seq` still bought the warmup composition (T1 2/22 at
-  2.6 s vs c2's 13.2 s).
-- **Audit clean:** all six published ratios recomputed from raw CSVs/logs (43.2%→43%,
-  144.8×→~145×, 1.68×→1.7×, 53.9 exact, 6.4 s→~6 s, 1.36×→~1.4×); refusal line
-  verified verbatim in `server-c5.log`.
+- **Arc pushed** `dd43788..1094910` (session-12 wrap-up) at session start.
+- **Swap task (unrelated, user request):** diagnosed current state (`/swap.img` 4G,
+  80% full; stale fstab line for a nonexistent `/swapfile_extra`) and handed the user
+  the sudo commands for a permanent 8G swapfile. NOT yet executed — swap still 4G
+  (3.0G used) at wrap-up; record here when done.
+- **OLMoE-1B-7B batch — published `632fdf7`, the queue's last model:** arch
+  `olmoe`, 4.0 GB, non-thinking, fourth plain transformer (absent from both the
+  hybrid and rollback lists — verified in the pin's llama-arch.cpp; behavior
+  matches). (a) **10.75 tok/s**, 0 majflt/tok, load 8.2 s, prefill 1.67 s; (b)
+  10.13 tok/s (−6%, mildest fits-RAM penalty yet), 0 majflt BOTH cells, 97.0% hit,
+  2.3 MiB/tok, prefill 7.81 s; (c1) native reuse from the first follow-up (T2 26/34,
+  T3 26/69); (c2) warmup T1 6.6 → **0.12 s (~56×)** — largest warmup ratio measured
+  (non-thinking + native reuse ⇒ the whole replayed prefix is recoverable); (c3) ≡
+  c2 (echo no-op); (c4) free chop 26/34; (c5) ≡ c4 (pool unused). Answers
+  42/52/62 verified in every cell.
+- **Fits-RAM law refined (published):** the verdict is set by the **model-plus-cache
+  sum**, not the model alone — OLMoE (4 GB + 3.7 GiB cache) pays −6% with zero faults
+  while Ling-mini (9.9 GB + 7.5 GiB cache) pays −31% in swap.
+- **Audit clean:** −5.8%→−6%, 2.35→2.3 MiB, 56.3×→~56×, prefill 40/5.12=7.81 s —
+  all recomputed from raw CSVs/logs. One near-miss caught BEFORE publish: README
+  model-count "six" → "seven" on the reuse row.
+- **Queue closed:** eight models, complete cross-arch matrix (3 qwen35moe hybrids ~2×
+  RAM, 1 LFM hybrid fits-RAM, 4 plain transformers spanning 4→19 GB). Next work is
+  the post-queue list (Next actions), not new models.
 
 ## Artifacts touched (this session)
 
 | File | What |
 |---|---|
-| `scripts/host-bench-q36-c1c5.patch` | the Qwen3.6 rows + summary/README fold-in diff published as d24f55e |
-| `PROGRESS.md` | this rewrite + the session-12 history entry |
-| `cjl4hd:main` `d24f55e` | published: Qwen3.6 section, summary/conclusions/recommendations updates, README perf column |
-| `.bench-report/Qwen3.6-35B-{a-baseline,A3B-UD-Q4_K_M}.{csv,log}` | cells (a)/(b) raw evidence |
-| `/tmp/bench-q36/` | c-suite evidence: `run-c{1..5}.log`, `c{1..5}/{t,r}{1..3}.json`, `server-c{1..5}.log` (regenerable by rerunning the cells) |
-| Kept from sessions 10–11 | `/tmp/lp-verify/` (mismatch runner), `~/git/lp-ci/` (~9 GB, removable after #29085 lands, keep `ci-results/`), `/tmp/nemotron-budget-issue-draft.md` (user's to post) |
+| `scripts/host-bench-olmoe-c1c5.patch` | the OLMoE rows + summary/README fold-in diff published as 632fdf7 |
+| `PROGRESS.md` | this rewrite + the session-13 history entry |
+| `cjl4hd:main` `632fdf7` | published: OLMoE section, queue-closure line, summary/recommendations updates, README perf column |
+| `.bench-report/olmoe-{a-baseline,1b-7b-0924-instruct-q4_k_m}.{csv,log}` | cells (a)/(b) raw evidence |
+| `/tmp/bench-olmoe/` | c-suite evidence: `run-c{1..5}.log`, `c{1..5}/{t,r}{1..3}.json` (regenerable by rerunning the cells) |
+| Kept | `/tmp/lp-verify/` (mismatch runner), `~/git/lp-ci/` (~9 GB, removable after #29085 lands), `/tmp/nemotron-budget-issue-draft.md` (user's to post) |
 
-Arc state: `feat/session-residency` == `fork/feat/session-residency` at `dd43788`
+Arc state: `feat/session-residency` == `fork/feat/session-residency` at `1094910`
 (pushed this session); the wrap-up commit below goes on top locally per the session-5
 convention — push is yours. The `core/src/engine/session.cpp` pos0 port stays
 working-tree-only — NEVER commit it; stash it for pin builds and the ctest gate.
@@ -139,21 +130,13 @@ Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` l
    `git worktree remove --force ~/git/lp-ci` (keep `ci-results/` logs).
 2. **User: post the Nemotron-H/H_MOE issue** from `/tmp/nemotron-budget-issue-draft.md`
    (own wording; AI-content rule). Record the issue number here when posted.
-3. **Finish the bench queue — OLMoE-1B-7B last** (Qwen3.6 done, seven published).
-   Small 1B-7B MoE: check size + arch first (`arch=` from the (a) log; likely
-   `olmoe`) and think behavior — expect a fits-RAM profile (LFM2.5/Ling-mini class:
-   streaming may LOSE) unless its cache footprint tips it over. Per model: (a) direct
-   pin-build CLI run — NOT `bench-report.sh`, which hardcodes the streaming stack and
-   is cell (b) — same protocol minus the streaming flags; (b) `bench-report.sh`;
-   (c1–c3) `cellc.sh` (3 positional args, `mkdir -p` OUTDIR first; MAXTOK start 192
-   and ladder from the r1 reasoning length — Laguna 384, Qwen3-30B 768; empty content
-   + FAIL = truncation); (c4/c5) divergence cells — c5 budget 64 per the OOM law, and
-   READ THE `depth=` LINE on any refusal (Qwen3.6 lesson: a heavy thinker's turn can
-   exceed the budget; the refusal is the documented worst case, not a bug). Check the
-   first follow-up's `n_reused` before trusting echo on a new template (qwen36
-   lesson). Publish via `scripts/publish-host-bench.sh`, fold into
-   Summary/Conclusions/Recommendations + README. **Audit rule (five catches):** every
-   number, ratio, and unit conversion (MiB→GiB!) from the run's own CSV/log.
+3. **Bench queue COMPLETE — post-queue work:** (a) refresh `docs/benchmarks.md` /
+   `docs/serve.md` with the eight-model host matrix; (b) Ling-mini edit-turn reuse
+   with captured aider payloads; (c) opencode re-test with `--auto-echo` on LFM2.5;
+   (d) daily driver back on :8017 when benching ends; (e) README feature tables
+   refreshed at every wrap-up (rule 6 lives there). If new models arrive later, the
+   per-model protocol lives in the session-12/13 history entries (MAXTOK ladder,
+   echo first-follow-up check, `depth=` on refusals, 3-arg cellc + mkdir OUTDIR).
 4. **Kill-process rule (docs/MISTAKES.md):** never chain `pkill -f <pat>` with
    follow-up statements — bracket the pattern (`pkill -f "[c]ellc.sh"`) or run it
    standalone and assert afterwards.
@@ -984,3 +967,40 @@ as I'm monitoring that."
 **State:** gates green at wrap-up; no listeners/engine procs; only the user's tmux
 session ("0") alive; arc `dd43788` (+ this wrap-up local, push is yours); fork/main
 through `d24f55e` carrying all SEVEN models' rows; queue head OLMoE-1B-7B (last).
+
+## 2026-09-20 — Session 13: OLMoE completes the eight-model queue; fits-RAM law refined
+
+User: "TODO unrelated to this project: lets increase swap to 8GB permanently… Then lets
+continue with suggested followups."
+
+- **Arc pushed** `dd43788..1094910` (session-12 wrap-up).
+- **Swap task (host-level, not project):** current swap is `/swap.img` 4G at 80% used;
+  fstab also carries a stale line for a nonexistent `/swapfile_extra`. Handed the user
+  the sudo commands (swapoff → rm → fallocate 8G → mkswap → swapon; fstab line 12
+  already makes it permanent; stale line removed conditionally). NOT executed at
+  wrap-up — swap still 4G/3.0G used. Relevant context for the OOM law: the host has
+  been leaning on swap during bench bursts; 8G widens the margin for c5-style snapshot
+  budgets.
+- **OLMoE-1B-7B batch (arch `olmoe`, 4.0 GB, non-thinking):** classification verified
+  in the pin (absent from both hybrid and rollback lists). (a) 10.75 tok/s, 0 majflt,
+  load 8.2 s, prefill 1.67 s; (b) 10.13 tok/s (−6%), 0 majflt both cells, 97.0% hit,
+  2.3 MiB/tok, prefill 7.81 s; (c1) T2 26/34, T3 26/69; (c2) warmup T1 6.6 → 0.12 s
+  (**~56×**, largest in the matrix); (c3) ≡ c2 (no-op); (c4) 26/34 free chop; (c5) ≡
+  c4. Suite ran start-to-finish inside one 4-minute poll window (small model).
+  Answers 42/52/62 verified everywhere.
+- **Fits-RAM law refined:** OLMoE's 3.7 GiB cache coexists with the 4 GB model at
+  zero faults (−6% decode), vs Ling-mini where the 7.5 GiB cache pushed a 9.9 GB
+  model into swap (−31%) — the verdict is the model-plus-cache sum.
+- **Published `632fdf7`** via the publisher (section + queue-closure line +
+  summary/recommendations + README rows: reuse across seven models, OLMoE divergence
+  point, ~56× warmup, OLMoE added to the echo no-op set). Audit clean; one near-miss
+  caught pre-publish (README model count six → seven).
+- **Queue CLOSED.** Eight models span the full profile space: 3 qwen35moe hybrids
+  (~2× RAM, thrash→streaming-wins, echo-reconcile shapes, hybrid full-clears,
+  warmup+rs-seq composition with a live depth-135 refusal), 1 LFM hybrid (fits RAM),
+  4 plain transformers (free chops, c5 ≡ c4, warmup composes for free). Next: the
+  post-queue list (Next actions 3).
+
+**State:** gates green at wrap-up; environment clean; arc `1094910` (+ this wrap-up
+local, push is yours); fork/main through `632fdf7` carrying all EIGHT models' rows;
+swap resize pending on the user's sudo.
