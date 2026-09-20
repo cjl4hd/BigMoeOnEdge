@@ -6,16 +6,17 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-20 (session 16). Phase: **feature A/B campaign** —
-OLMoE cell results landed (ubatch 512 CONFIRMED with numbers; dense-odirect
-neutral; ngram −4.3% prose / +3.3% repetition); feature-coverage matrix published
-and corrected (`a81106b`); backlog narrowed to LFM2.5 ngram, Cyber-Tiel MTP-on-
-matrix-cell, Cyber-Tiel substitute/drop-in-prefill, Qwen3.6 io-two-wave.*
-*One-line status: published `790d364` (A/B matrix) then `a81106b` (correction —
-the feature docs mtp/ngram/route-ahead/substitution/prefetch/expert-prediction/
-row-stream ALREADY carry measured tables; my "unmeasured" audit had only diffed
-the benchmark tables). bench-report.sh PROMPT now env-overridable (the `-p`-after-
-default bug made my first code-prompt pair silently run the essay prompt).*
+*Resume last rewritten: 2026-09-20 (session 17). Phase: **feature A/B campaign
+COMPLETE** — every knob measured or credited to its feature doc; published chain
+`790d364` → `a81106b` → `e4345ad` on fork/main. Upstream: #29085 READY FOR
+REVIEW — user monitors CI.*
+*One-line status: Cyber-Tiel batch (bench binary, one load per cell): substitute
+**+47.2%** (biggest single win on this host), drop-0.75 **+32.3%** (recipe
+quantified), drop-in-prefill **harmful** (−11.6% vs drop alone, majflt 26.6→158),
+MTP **+5.2%** (I/O-bound ceiling). LFM2.5 × ngram **+7.6%** — verify composes
+with rs rollback planes. Qwen3.6 × io-two-wave **+25.2%**, hard faults 5.1×
+lower — the last untabled knob pays. Backlog now: only `--release-mmap` (load
+metric) + the Cyber-Tiel substitution quality gate.*
 
 ## State delta (this session)
 
@@ -23,25 +24,32 @@ default bug made my first code-prompt pair silently run the essay prompt).*
   `/swapfile_extra` line gone. Impact doctrine in Environment below: thrash
   profiles unchanged (file-backed eviction never touches swap), c5-class anon
   over-commits now complete instead of OOM, majflt/tok stays the pressure guard.
-- **Feature A/B campaign started (published `790d364`, corrected `a81106b`):**
-  pairing matrix added to benchmark-method.md; then CORRECTED — mtp.md, ngram.md,
-  route-ahead.md, cache-aware-substitution.md, prefetch.md, expert-prediction.md,
-  row-gathered-tables.md already carry measured tables (models: Qwen3.5/3.6,
-  Qwen3-30B, gpt-oss). Live backlog: LFM2.5 × ngram (rollback composition),
-  Cyber-Tiel × `--mtp` on the exact Q4_K_M matrix cell + substitute/drop-in-
-  prefill headroom, Qwen3.6 × `--io-two-wave` (the only never-tabled knob),
-  `--release-mmap` load metric. **ALSO: docs/serve.md exists on the arc but was
-  NEVER published to fork/main** — check why before the next serve-doc work.
-- **OLMoE A/B cells (pin build; ratios internally consistent — baselines ~13.3
-  tok/s here vs 10.13 published on the bench stack, so only RATIO rows are
-  comparable):** ubatch 256 −0.9% / 1024 −1.7% → **512 confirmed**; dense-odirect
-  −0.6% neutral; ngram prose −4.3% (5.6% coverage, 16.7% accept) vs repetition
-  prompt **+3.3%** (64.5% accept, 1.45 tok/verify) — ngram works when fed but
-  CPU verify cost caps it on a small model.
-- **bench-report.sh fixed:** `PROMPT` is now `${PROMPT:-default}` (was
-  hard-assigned; the script appends its own `-p` AFTER extra args, so `-p` on the
-  CLI could never override — my first code-prompt pair silently ran the essay
-  prompt; detected via identical ngram draft stats across 'different' prompts).
+- **Cyber-Tiel batch (bench binary `bench/host-rs`, 256 greedy tok, per-cell
+  load):** base 1.884 tok/s (21.9 majflt/tok, stall 0.180). `--mtp` 1.982
+  (**+5.2%**: 51.3% accept, 2.51 tok/verify — steps cut ~60% but the cell stays
+  flash-bound; speculation pays on compute-bound profiles). drop-0.75 2.493
+  (**+32.3%**, stall halved — the published recipe, quantified on the carrier).
+  drop-0.75 + `--drop-in-prefill` 2.203 (**−11.6% vs drop alone**, decode majflt
+  26.6→158.5 — prefill dropping churns the cold cache: keep it OFF).
+  `--expert-substitute 0.15` **2.773 (+47.2%)**: 18.1% of slots reranked resident
+  (14788/81920), stall 0.180→0.060 — biggest single win measured on this host;
+  lossy, quality gate on record is Qwen3.6's (substitution doc), carrier text
+  ungated until the same gate runs here.
+- **LFM2.5 × `--ngram` (bench binary):** 7.566 → **8.143 (+7.6%)**, 48.5% accept
+  — **speculative verify composes with the rs rollback planes** (disjoint state,
+  clean win); majflt rise (0.2→18.8) is cheap page-cache re-read on fits-RAM.
+- **Qwen3.6 × `--io-two-wave` (bench binary):** 1.763 → **2.208 (+25.2%)**,
+  majflt/tok 175.3 → **34.6 (5.1× collapse)** — the last untabled knob pays on
+  the worst thrash cell.
+- **serve.md triage (closed, no action):** docs/serve.md + docs/adr/ + MISTAKES.md
+  are deliberately PR-scoped — serve.md was born on the serve-bridge commits
+  (d83d153 preserve_reasoning → 57c654e auto-echo → 39cc706 the aider
+  canonicalize limit) and ships with the arc's PR, not via the bench-evidence
+  publish flow.
+- **Ops note:** bench cells are metrics-only — generated text does not reach the
+  logs, so the lossy substitution row points at the substitution doc's quality-
+  gate protocol instead of a char diff. Raw evidence: `/tmp/feat-ab/` (CSVs +
+  logs per cell).
 - **Aider edit-turn reuse — PROVEN (post-queue item b):** real aider session over
   the serve bridge (Ling-mini, whole edit format, no auto-commits). Server
   TELEMETRY per call: turn A call 1 (cold) 857/0/51.5 s; turn A call 2 (aider's
@@ -63,9 +71,9 @@ default bug made my first code-prompt pair silently run the essay prompt).*
 | File | What |
 |---|---|
 | `PROGRESS.md` | this rewrite + the session-15 history entry |
-| `/tmp/aider-run1.log`, `/tmp/aider-run2.log` | aider transcripts (regenerable via the recipe) |
-| `/tmp/bmoe-serve.log` | server TELEMETRY rows — the reuse evidence (ephemeral; full rows quoted in the history entry) |
-| `~/aider-test/calculator.py` | fixture with both aider edits applied, uncommitted |
+| `scripts/host-bench-feature-results.patch` | the feature-A/B section + method-matrix update published as e4345ad |
+| `/tmp/feat-ab/{olmoe,cyber,lfm,q36}/` | raw A/B evidence: CSVs + logs per cell (regenerable via the recipes in the history) |
+| `PROGRESS.md` | this rewrite + the session-17 history entry |
 | Kept | `/tmp/lp-verify/` (mismatch runner), `~/git/lp-ci/` (~9 GB, removable after #29085 lands), `/tmp/nemotron-budget-issue-draft.md` (user's to post) |
 
 Arc state: `feat/session-residency` == `fork/feat/session-residency` at `c6db52b`
@@ -1090,3 +1098,27 @@ still with the user; #29085 with the user for CI monitoring.
 **State:** arc `ab79bad` pushed; fork/main through `eb8ec6a`; daily driver UP;
 next: opencode re-test on the live daily driver; #29085 + Nemotron draft still
 with the user.
+
+## Session 17 — 2026-09-20: feature A/B campaign COMPLETE (`e4345ad`)
+
+- **Cyber-Tiel (bench binary, one load per cell):** base 1.884 tok/s / 21.9
+  majflt/tok / stall 0.180. substitute-0.15 **2.773 (+47.2%)** — 18.1% slots
+  reranked resident, stall 0.060, biggest single win on this host (lossy; gate on
+  record is Qwen3.6's). drop-0.75 **2.493 (+32.3%)** — published recipe
+  quantified. drop+prefill-drop 2.203 (**−11.6% vs drop**, decode majflt
+  26.6→158.5 — prefill dropping churns a cold cache; keep OFF). mtp 1.982
+  (**+5.2%**, 51.3% accept, 2.51 tok/verify — I/O-bound ceiling; speculation pays
+  on compute-bound profiles, confirming the mtp.md thesis on the carrier).
+- **LFM2.5 × ngram: +7.6%** (7.566→8.143, 48.5% accept) — **verify composes with
+  the rs rollback planes**; the majflt rise is cheap page-cache re-read.
+- **Qwen3.6 × io-two-wave: +25.2%** (1.763→2.208), majflt/tok 175.3→34.6 (5.1×)
+  — the last untabled knob pays on the worst cell.
+- **serve.md triage closed:** PR-scoped by design (born on the serve-bridge
+  commits; ships with the arc's PR), same for docs/adr/ + MISTAKES.md.
+- **Ops note:** bench cells are metrics-only (no generated text in logs) — the
+  lossy rows cite the substitution doc's quality-gate protocol instead of char
+  diffs. Raw evidence in /tmp/feat-ab/ (regenerable).
+
+**State:** published chain `790d364` → `a81106b` → `e4345ad` on fork/main; arc
+record this commit; remaining backlog: `--release-mmap` load metric (lowest),
+Cyber-Tiel substitution quality gate. #29085 + Nemotron draft still with user.
