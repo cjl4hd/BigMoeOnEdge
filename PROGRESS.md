@@ -6,49 +6,48 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-20 (session 14). Phase: **host bench campaign
-COMPLETE + evidence docs refreshed** — all EIGHT queue models published; the host
-campaign's protocol lessons are folded into `docs/benchmark-method.md` and
-`docs/session.md` (`eb8ec6a` on fork/main). Upstream: #29085 READY FOR REVIEW —
-user monitors CI.*
-*One-line status: session-13 wrap-up push verified (`c6db52b` on fork — the earlier
-exit-1 was pipe noise). Published `eb8ec6a`: benchmark-method gained "The host
-campaign" (matrix scope + MAXTOK ladder, echo first-follow-up `n_reused` check,
-`depth=` on refusals); session.md's thinking-turn fallback gained the
-template-sensitivity refinement. `docs/benchmarks.md` confirmed Android-scoped;
-`docs/serve.md` does not exist (stale next-action). Swap resize still pending on
-the user's sudo.*
+*Resume last rewritten: 2026-09-20 (session 15). Phase: **post-queue validation** —
+bench campaign complete; evidence docs refreshed; swap 8G live; aider edit-turn
+reuse PROVEN on real agent payloads. Upstream: #29085 READY FOR REVIEW — user
+monitors CI.*
+*One-line status: swap verified 8G/658Mi-used; impact doctrine recorded (thrash
+metrics unchanged — file-backed eviction; c5-class anon over-commits now complete
+instead of OOM; majflt/tok stays the guard). Aider on the serve bridge: turn B
+recovered **504 of 576** prompt tokens (prefill 20.7 s vs 51.5 s cold) — cross-
+edit-turn KV reuse at 87.5%, divergence point = aider's changed file snapshot;
+both edits correct. Ling-mini arch noted `bailingmoe2`. Daily driver LFM2.5 UP on
+:8017 with --auto-echo, ready for the opencode re-test.*
 
 ## State delta (this session)
 
-- **Session-13 wrap-up push verified:** `c6db52b` is on `fork/feat/session-residency`
-  (the previous attempt's exit-1 was pipe noise; ancestry clean).
-- **Swap task (unrelated, user request):** diagnosed current state (`/swap.img` 4G,
-  80% full; stale fstab line for a nonexistent `/swapfile_extra`) and handed the user
-  the sudo commands for a permanent 8G swapfile. NOT yet executed — swap still 4G
-  (3.0G used) at wrap-up; record here when done.
-- **Evidence tables refreshed — published `eb8ec6a` on fork/main:** target audit
-  first — `docs/benchmarks.md` is the ANDROID matrix (host rows belong in
-  `docs/host-benchmarks.md`, which already has them), `docs/serve.md` does not
-  exist; real targets were `docs/benchmark-method.md` + `docs/session.md`.
-  benchmark-method gains **"The host campaign"** under "Where the published numbers
-  come from": the eight-model scope plus the three protocol rules (MAXTOK laddering
-  per model, echo first-follow-up `n_reused` check, `depth=` reading on rewind
-  refusals) so the session-12/13 lessons outlive the sessions. session.md's
-  thinking-turn fallback paragraph gains the template-sensitivity refinement (same
-  arch family, opposite echo-reconcile outcomes) + host-benchmarks cross-link.
-- **Swap task:** unchanged — sudo commands are with the user, still pending (4G,
-  ~3G used).
-- (Session-13 details — OLMoE batch, fits-RAM law, audit — live in the session-13
-  history entry; the queue stays CLOSED.)
+- **Swap verified:** 8.0Gi total, 658Mi used; fstab line 12 intact, stale
+  `/swapfile_extra` line gone. Impact doctrine in Environment below: thrash
+  profiles unchanged (file-backed eviction never touches swap), c5-class anon
+  over-commits now complete instead of OOM, majflt/tok stays the pressure guard.
+- **Aider edit-turn reuse — PROVEN (post-queue item b):** real aider session over
+  the serve bridge (Ling-mini, whole edit format, no auto-commits). Server
+  TELEMETRY per call: turn A call 1 (cold) 857/0/51.5 s; turn A call 2 (aider's
+  edit-confirm round) 231/**625**/11.9 s; **turn B: 576 prompt / 504 reused /
+  20.7 s prefill** — cross-edit-turn reuse at 87.5%, divergence anchored at the
+  re-sent changed file snapshot, exactly the prefix-diff design's prediction.
+  Both edits correct (`subtract()`, `multiply_check()`), existing code untouched.
+  Aider recipe: `OPENAI_API_KEY=dummy aider --model openai/bmoe-local
+  --openai-api-base http://127.0.0.1:8017/v1 --no-auto-commits --yes-always`.
+- **Ling-mini arch noted:** `bailingmoe2` (server load line).
+- **Environment restored:** daily driver LFM2.5 UP on :8017 with --auto-echo
+  (health ok); aider/serve-lm tmux sessions killed; `~/aider-test` left with both
+  edits applied, uncommitted (fixture state).
+- (Session-14 details — evidence-table refresh `eb8ec6a` — live in the session-14
+  history entry.)
 
 ## Artifacts touched (this session)
 
 | File | What |
 |---|---|
-| `scripts/host-bench-evidence-tables.patch` | the benchmark-method/session.md fold-in diff published as eb8ec6a |
-| `PROGRESS.md` | this rewrite + the session-14 history entry |
-| `cjl4hd:main` `eb8ec6a` | published: benchmark-method "The host campaign" + session.md template-sensitivity refinement |
+| `PROGRESS.md` | this rewrite + the session-15 history entry |
+| `/tmp/aider-run1.log`, `/tmp/aider-run2.log` | aider transcripts (regenerable via the recipe) |
+| `/tmp/bmoe-serve.log` | server TELEMETRY rows — the reuse evidence (ephemeral; full rows quoted in the history entry) |
+| `~/aider-test/calculator.py` | fixture with both aider edits applied, uncommitted |
 | Kept | `/tmp/lp-verify/` (mismatch runner), `~/git/lp-ci/` (~9 GB, removable after #29085 lands), `/tmp/nemotron-budget-issue-draft.md` (user's to post) |
 
 Arc state: `feat/session-residency` == `fork/feat/session-residency` at `c6db52b`
@@ -61,7 +60,13 @@ Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` l
 
 ## Environment state
 
-- **Server**: DOWN (the c5 OOMs took it; restart when a serve/agents session needs it).
+- **Swap**: RESIZED 2026-09-20 (user ran the sudo): `/swap.img` now 8G (658Mi used at
+  verification), permanent via fstab line 12; stale `/swapfile_extra` line removed.
+  Impact doctrine: thrash profiles are UNCHANGED (model pages are file-backed — they
+  evict+re-read, not swap); what widens is the anon-allocation margin — c5-style
+  snapshot/KV over-commits that used to OOM now complete. Guard unchanged: majflt/tok
+  stays the pressure sensor before any perf claim (a config error that used to fail
+  fast now degrades slowly instead).
   LFM2.5 daily driver: `setsid nohup python3 -u scripts/bmoe-serve.py -m ~/llm/models/LFM2.5-8B-A1B-UD-Q4_K_M.gguf --engine-args "--ctx-size 8192 --chatml" --auto-echo --port 8017 > /tmp/bmoe-serve.log 2>&1 &`
   (Ling-mini alternative in the history; `--auto-echo` only for thinking models; run it
   inside tmux — background processes die between tool calls here).
@@ -88,7 +93,9 @@ Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` l
 - **gh CLI caveat (ggml-org)**: `gh pr edit/view` dies on the Projects-classic GraphQL
   deprecation — use REST: `gh api repos/ggml-org/llama.cpp/pulls/29085 --jq ...`;
   body edits via `-X PATCH ... -F body=@file`.
-- **aider scratch repo**: `~/aider-test` (planted `a - b` bug in `calculator.py`).
+- **aider scratch repo**: `~/aider-test` — fixture currently has both session-15
+  edits applied (uncommitted); reset with `git checkout -- calculator.py` before a
+  fresh run.
 - Untracked, NOT ours: `.opencode/`, `bmoe-arm64*`, `opencode.json`, `.aider*`, logs.
 - Ephemeral: `/tmp/bmoe-serve.log`, `/tmp/bmoe-reqs.jsonl` (only when `BMOE_DEBUG_ECHO=1`),
   `/tmp/bf-*` bench outputs, `/tmp/sweep-*.txt` + `/tmp/rsbench-*.err` (this session's
@@ -128,9 +135,10 @@ Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` l
 2. **User: post the Nemotron-H/H_MOE issue** from `/tmp/nemotron-budget-issue-draft.md`
    (own wording; AI-content rule). Record the issue number here when posted.
 3. **Bench queue COMPLETE — post-queue work:** (a) ~~docs refresh~~ DONE
-   (`eb8ec6a`); (b) Ling-mini edit-turn reuse with captured aider payloads;
-   (c) opencode re-test with `--auto-echo` on LFM2.5; (d) daily driver back on :8017
-   when benching ends; (e) README feature tables refreshed at every wrap-up (rule 6
+   (`eb8ec6a`); (b) ~~aider edit-turn reuse~~ DONE — 504/576 cross-turn reuse
+   proven, recipe in the session-15 history entry; (c) **opencode re-test with
+   `--auto-echo` on the LFM2.5 daily driver (UP now)**; (d) ~~daily driver on
+   :8017~~ DONE; (e) README feature tables refreshed at every wrap-up (rule 6
    lives there). If new models arrive later, the per-model protocol now also lives
    in `docs/benchmark-method.md` §"The host campaign" (MAXTOK ladder, echo
    first-follow-up check, `depth=` on refusals, 3-arg cellc + mkdir OUTDIR).
@@ -1030,3 +1038,37 @@ swap resize pending on the user's sudo.
 **State:** arc `c6db52b` pushed; the session-14 record commit goes on top and is
 pushed; fork/main through `eb8ec6a`; swap resize pending; Nemotron issue draft
 still with the user; #29085 with the user for CI monitoring.
+
+## Session 15 — 2026-09-20: swap 8G live; aider edit-turn reuse PROVEN (504/576)
+
+- **Swap verified** (user ran the sudo): 8.0Gi total / 658Mi used, fstab line 12
+  permanent, stale `/swapfile_extra` line gone. Impact doctrine recorded in
+  Environment: (1) thrash profiles UNCHANGED — the ~2× RAM models' majflt/tok
+  counts file-backed page eviction/re-read, which never touches swap, so the
+  bench matrix and its sensor stay valid; (2) c5-class anon over-commits (the
+  rs-seq snapshot pools, 1.7–1.8× ctx-size GB) now COMPLETE instead of hitting
+  the OOM killer — the widened margin is exactly what makes big-budget c5 cells
+  and agent sessions safe; (3) guard unchanged: majflt/tok before any perf claim
+  (a config error that used to fail fast now degrades slowly).
+- **Aider edit-turn reuse experiment (post-queue item b) — PROVEN:** Ling-mini
+  served on :8017 (`arch bailingmoe2` per the load line — noted), aider 0.86.2
+  pointed at the bridge (`OPENAI_API_KEY=dummy` — aider refuses to start without
+  a key string even for a local bridge; the only setup gotcha). Real session in
+  `~/aider-test`: turn A "add subtract()", turn B "add multiply_check()". Server
+  TELEMETRY (the evidence): turn A call 1 (cold) **857 prompt / 0 reused / 51.5 s
+  prefill**; turn A call 2 (aider's edit-confirm round) 231/**625**/11.9 s;
+  **turn B: 576 / 504 / 20.7 s** — cross-edit-turn reuse 87.5%, divergence
+  anchored at the re-sent changed-file snapshot, exactly the prefix-diff design's
+  prediction. Both edits verified correct in calculator.py; 6.7–9.2 tok/s decode.
+  (Note: BMOE_DEBUG_ECHO=/tmp/bmoe-reqs.jsonl capture produced no file — the
+  echo gate at bmoe-serve.py:359 covers a different path; TELEMETRY rows are the
+  evidence of record.)
+- **Recipe (regenerable):** reset fixture → serve Ling-mini on :8017 → tmux
+  aider interactive → two edit requests → read TELEMETRY in /tmp/bmoe-serve.log.
+- **Environment restored:** daily driver LFM2.5 UP on :8017 with --auto-echo
+  (health ok); aider + Ling-mini sessions killed; fixture left with both edits
+  applied (uncommitted, reset documented).
+
+**State:** arc `ab79bad` pushed; fork/main through `eb8ec6a`; daily driver UP;
+next: opencode re-test on the live daily driver; #29085 + Nemotron draft still
+with the user.
