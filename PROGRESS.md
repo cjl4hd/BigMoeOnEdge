@@ -79,10 +79,13 @@ Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` l
   `python3 -m venv /tmp/evalvenv && /tmp/evalvenv/bin/pip install pyarrow
   pandas`) — system python is PEP-668 blocked (no pyarrow) and CANNOT read the
   parquet; the gate scripts must run under `/tmp/evalvenv/bin/python`.
-- **Daily driver during the quality gate: DOWN** (killed for RAM). Restore
-  when the gate finishes: `setsid nohup python3 -u scripts/bmoe-serve.py -m
-  ~/llm/models/LFM2.5-8B-A1B-UD-Q4_K_M.gguf --engine-args "--ctx-size 8192
-  --chatml" --auto-echo --port 8017 > /tmp/bmoe-serve.log 2>&1 &`.
+- **Daily driver during the quality gate: KILLED by PID** (found ALIVE at 09:59 —
+  a stale engine from Sun 15:04 that survived its session's teardown because
+  `setsid nohup … &` detaches it from the tmux session; resume prose said DOWN,
+  the process table won). Restore when the gate finishes: `setsid nohup python3
+  -u scripts/bmoe-serve.py -m ~/llm/models/LFM2.5-8B-A1B-UD-Q4_K_M.gguf
+  --engine-args "--ctx-size 8192 --chatml" --auto-echo --port 8017 >
+  /tmp/bmoe-serve.log 2>&1 &`.
 - **Swap**: RESIZED 2026-09-20 (user ran the sudo): `/swap.img` now 8G (658Mi used at
   verification), permanent via fstab line 12; stale `/swapfile_extra` line removed.
   Impact doctrine: thrash profiles are UNCHANGED (model pages are file-backed — they

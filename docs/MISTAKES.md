@@ -26,3 +26,30 @@ a bracketed pattern that cannot match its own command line — `pkill -f "[c]ell
 or split the kill into its own single command and assert afterwards
 (`pgrep -f "[c]ellc.sh" || echo dead; ls <path-i-expect-gone> 2>&1`). Never chain
 `pkill -f X` with any follow-up statement in the same shell command.
+
+---
+
+## 2026-09-21 — `setsid nohup … &` engines survive their tmux session's teardown ("DOWN" while UP)
+
+**What failed:** session-15's wrap-up recorded the LFM2.5 daily driver as DOWN after
+killing the serve tmux session — but the engine had been launched `setsid nohup … &`,
+so it detached from the session and survived. The stale engine (started Sun 15:04)
+squatted RAM through the night and into session-19's RAM-constrained quality gate;
+the resume asserted a false environment state that the process table contradicted.
+Found only by accident, reading a `ps` output for an unrelated question.
+
+**Root cause:** `setsid nohup cmd &` re-parents the process to init — the tmux
+session is no longer its ancestor, so `tmux kill-session` cannot reach it. The
+belt-and-suspenders launch pattern (session wrapper + setsid detach) creates a
+process no teardown step in the workflow owns or tracks.
+
+**Cost:** ~8 h of unknown contention on a 4-core host; ~2 GB anon + page cache
+missing during a gate that needs it; one false "DOWN" resume entry trusted until
+session 19.
+
+**Prevention rule (checkable):** any engine started detached gets its PID recorded
+in PROGRESS before wrap-up (`pgrep -f "[b]moe-serve.py"`), and every "server
+UP/DOWN" claim in the resume is backed by a process assertion, not by teardown
+intent: `pgrep -f "[b]moe-serve.py" && echo UP || echo DOWN`. Never claim teardown
+without the assert — `tmux kill-session` does not kill setsid-reparented children;
+kill the recorded PID (`kill <pid>`), then assert the process is gone.
