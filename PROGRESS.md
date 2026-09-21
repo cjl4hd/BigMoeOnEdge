@@ -167,9 +167,13 @@ Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` l
    `docs/host-benchmarks.md` (patch flow) + arc record. If a cell OOMs or fails:
    rerun that script alone (datasets persist in `~/llm/data/`).
    *Interim (session 19): MMLU cells DONE — L0 66.0%, L0.15 67.0% (neutral, clean
-   pass); HumanEval L0 in progress. MMLU evidence already committed as safety net
-   at `bench-data/qgate-cyber-2026-09-21/` (scan clean); land the HumanEval cell
-   JSONs there at collect time too.*
+   pass); HumanEval L0 DONE — 43/50 = 86% (matches the Qwen3.6 anchor). The
+   original tmux chain DIED between HE cells (rc=1, empty done.txt, scrollback
+   lost — no per-cell log existed). Relaunch: HE λ=0.15 ONLY, tmux `qgate15`,
+   driver output now captured to `humaneval/driver_L015.log` (lesson: the
+   per-cell log is the durable error surface). MMLU + HE L0 evidence committed
+   at `bench-data/qgate-cyber-2026-09-21/` (scan clean); land HE L0.15 there at
+   collect time too.*
 2. **Restore the LFM2.5 daily driver** after the gate finishes (it is DOWN for
    the run): command in Environment state.
 3. **Opencode re-test with `--auto-echo`** on the restored LFM2.5 daily driver
