@@ -48,6 +48,14 @@ collect per Next actions 1 before publishing anything about λ on the carrier.*
   were NOT on this host — the substitution doc's tables were produced elsewhere
   (or /tmp evidence died). Datasets now live in `~/llm/data/` so the gate is
   reproducible here.
+- **Side task: `multiple-choice` skill shipped** (machine-level, `cjl4hd/skills`):
+  one-token logprob classification (label + renormalized confidence) — the
+  tinymmlu-gate technique generalized to triage/scans/routing. Authored in
+  `~/skills` (`5d08f25` + YAML-quoting fix, batch helper `mc_classify.py`
+  mock-verified end-to-end), installed to `~/.agents/skills` + `.claude` shim.
+  Same session: canonical-repo housekeeping — project-lifecycle consolidation
+  (`1507da3`) and websearch finally tracked (`7747290`). **PENDING:** live
+  verification against a real endpoint (post-gate; see Next actions).
 
 ## Artifacts touched (this session)
 
@@ -162,6 +170,11 @@ Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` l
    the run): command in Environment state.
 3. **Opencode re-test with `--auto-echo`** on the restored LFM2.5 daily driver
    (last post-queue item).
+3b. **Verify the `multiple-choice` skill live** (needs an endpoint — after the
+   gate): logprobs round-trip through the bridge on :8017 (does it forward
+   `top_logprobs`? does the think-block garble a thinking model's first
+   token?), direct `bmoe-cli --server` as fallback; then the demo: ~50
+   judgment items, probe vs short-generation cost + agreement, per the SKILL.md.
 4. **#29085 is READY FOR REVIEW — the user monitors its CI** (do not poll it
    proactively). When it merges: reopen PR #29117 (humanize first —
    `/tmp/pr-index-shift-description-draft.md` is the tool draft), then submodule
