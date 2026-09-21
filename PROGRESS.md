@@ -6,17 +6,16 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-20 (session 17). Phase: **feature A/B campaign
-COMPLETE** — every knob measured or credited to its feature doc; published chain
-`790d364` → `a81106b` → `e4345ad` on fork/main. Upstream: #29085 READY FOR
-REVIEW — user monitors CI.*
-*One-line status: Cyber-Tiel batch (bench binary, one load per cell): substitute
-**+47.2%** (biggest single win on this host), drop-0.75 **+32.3%** (recipe
-quantified), drop-in-prefill **harmful** (−11.6% vs drop alone, majflt 26.6→158),
-MTP **+5.2%** (I/O-bound ceiling). LFM2.5 × ngram **+7.6%** — verify composes
-with rs rollback planes. Qwen3.6 × io-two-wave **+25.2%**, hard faults 5.1×
-lower — the last untabled knob pays. Backlog now: only `--release-mmap` (load
-metric) + the Cyber-Tiel substitution quality gate.*
+*Resume last rewritten: 2026-09-20 (session 18). Phase: **scoreboard carries
+verdicts; keep-off policy is ADR'd**. Published chain on fork/main:
+`790d364` → `a81106b` → `e4345ad` → `ab16ff5` (scoreboard) → `3aecace`
+(Verdict columns). Upstream: #29085 READY FOR REVIEW — user monitors CI.*
+*One-line status: every scoreboard row now has a **Verdict** — `On` (measured
+default), `Use-when` (pays only in its named regime), `Keep-off` (refuted or
+superseded). ADR-005 (arc): keep-off knobs STAY in the CLI default-off — they
+are the instruments their refutations were measured with; removal would orphan
+the evidence and invite re-implementation. Backlog unchanged: only
+`--release-mmap` (load metric) + the Cyber-Tiel substitution quality gate.*
 
 ## State delta (this session)
 
@@ -63,6 +62,15 @@ metric) + the Cyber-Tiel substitution quality gate.*
 - **Environment restored:** daily driver LFM2.5 UP on :8017 with --auto-echo
   (health ok); aider/serve-lm tmux sessions killed; `~/aider-test` left with both
   edits applied, uncommitted (fixture state).
+- **Session 18 (this): Verdict columns + ADR-005.** Scoreboard rows got
+  `On` / `Use-when` / `Keep-off` verdicts (published `3aecace`, 1 file
+  +22/−23, verified against the worktree). ADR-005 written + indexed on the
+  arc: refuted/harmful knobs (`--prefetch`, `--predict-prefetch`,
+  `--drop-in-prefill`, `--dense-odirect`) stay in the CLI default-off; the
+  verdict is documentation (scoreboard + `--help` + findings), not deletion;
+  overturning requires a new matched pair + explicit verdict flip. App exposure
+  checked: only default-off experimental rungs — no shipping path turns a
+  keep-off knob on.
 - (Session-14 details — evidence-table refresh `eb8ec6a` — live in the session-14
   history entry.)
 
@@ -73,6 +81,8 @@ metric) + the Cyber-Tiel substitution quality gate.*
 | `PROGRESS.md` | this rewrite + the session-15 history entry |
 | `scripts/host-bench-feature-results.patch` | the feature-A/B section + method-matrix update published as e4345ad |
 | `scripts/host-bench-scoreboard.patch` | the feature scoreboard (lossless/lossy best-per-feature tables) published as ab16ff5 |
+| `scripts/host-bench-verdicts.patch` | the Verdict columns published as 3aecace |
+| `docs/adr/005-keep-off-features-policy.md` | the keep-off policy ADR (arc-scoped; indexed in docs/README.md) |
 | `/tmp/feat-ab/{olmoe,cyber,lfm,q36}/` | raw A/B evidence: CSVs + logs per cell (regenerable via the recipes in the history) |
 | `PROGRESS.md` | this rewrite + the session-17 history entry |
 | Kept | `/tmp/lp-verify/` (mismatch runner), `~/git/lp-ci/` (~9 GB, removable after #29085 lands), `/tmp/nemotron-budget-issue-draft.md` (user's to post) |
@@ -1123,3 +1133,40 @@ with the user.
 **State:** published chain `790d364` → `a81106b` → `e4345ad` → `ab16ff5` on fork/main; arc
 record this commit; remaining backlog: `--release-mmap` load metric (lowest),
 Cyber-Tiel substitution quality gate. #29085 + Nemotron draft still with user.
+
+### 2026-09-20 — Session 18: scoreboard verdict columns + ADR-005 (keep-off policy)
+
+The user asked the right challenge question about the scoreboard: why do slowdowns
+appear in a "best result" table — and should refuted features be removed from
+mainline? The answer shaped two artifacts.
+
+**1. Verdict columns published (`3aecace` on fork/main, 1 file +22/−23).** Both
+tables got a `Verdict` column with a legend line: `On` = measured default,
+`Use-when` = pays only in its named regime, `Keep-off` = refuted or superseded.
+Details: the streaming-stack row is **On for past-RAM models, off for fits-RAM**
+(−6% to −31%); `--mtp`/`--ngram`/substitute/drop are Use-when with their regime
+named; `--prefetch`, `--predict-prefetch`, `--drop-in-prefill`, `--dense-odirect`
+are Keep-off (the last because it is superseded by `--dense-weights`, kept as a
+deprecated alias). One self-caught slip during editing: I first annotated the
+io-two-wave row as the help text being "stale" — wrong, the help says "pending the
+**on-device** A/B" and our A/B was host; the help is accurate, the on-device A/B
+is still open. Fixed before publish.
+
+**2. ADR-005 (`docs/adr/005-keep-off-features-policy.md`, arc-scoped, indexed in
+docs/README.md): keep-off features stay in the CLI default-off.** The decision is
+the instruments argument: the refutations were measured *with* these flags
+(bench cells + findings docs reference them by name), the knobs are how future
+work re-tests (the predictor's accuracy is proven even though acting on it
+refuted), refutations are regime-bound not eternal, and removal would orphan the
+evidence and invite re-implementation. The verdict lives in documentation —
+scoreboard, `--help` (kept honest: a knob whose help contradicts its measurement
+gets fixed in the same PR), findings docs. Rule 3 is the load-bearing detail:
+*accept-and-ignore is NOT acceptable* for any future cleanup — a silently ignored
+flag lies to scripts. Overturning a Keep-off verdict requires a new matched pair
+in a regime where the mechanism should win, with an explicit verdict flip, never
+a silent rewrite. App exposure verified first: only default-off experimental
+rungs — no shipping path turns a keep-off knob on.
+
+**State:** published chain now `…ab16ff5` → `3aecace` on fork/main; arc record
+this commit. Backlog unchanged: `--release-mmap` load metric, Cyber-Tiel
+substitution quality gate. #29085 READY FOR REVIEW (user monitors CI).
