@@ -43,6 +43,7 @@ sections; each feature's own doc carries its dedicated protocol.
 | `--ubatch 512` (protocol default) | OLMoE | 256: −0.9% · 1024: −1.7% | **On** (protocol default) | 512 confirmed with numbers; the alternatives only lose |
 | `--dense-odirect` | OLMoE (fits RAM) | −0.6% (neutral) | **Keep-off** — superseded by `--dense-weights` (deprecated alias), neutral at best | dense reads barely happen post-warmup on fits-RAM |
 | `--row-stream` | device (embedding rows) | ~0% (2.27–2.31 vs 2.30 tok/s) | **Use-when**: footprint pressure — a footprint lever, not a speed one | neutral by design |
+| `--release-mmap` | Qwen3.6 (deepest thrash) | **+5.2%** (1.916 → 2.015 tok/s) | **Use-when**: past-RAM/thrash models | post-load mapping release: decode faults 50 → 0.83/tok, decode reads −24% (18.3 → 13.9 GiB), cache hit 84.5 → 87.3%, load 7 s faster — the mapping's dense pages stop competing with the expert cache for page cache |
 
 **Lossy — output changes; never quote without the quality evidence:**
 
@@ -55,10 +56,10 @@ sections; each feature's own doc carries its dedicated protocol.
 | `--route-ahead 2` | host overlapped A/B | **+20–21%** | **Use-when**: with `--overlap` (experimental) | overlap stall −83% (0.060 → 0.010 s/tok), 97% of early reads useful; changes routing selection |
 | `--ngram` | LFM2.5 (hybrid) | **+7.6%** | **Use-when**: repetitive workload — ships off ([ngram.md](ngram.md)) | composes with the rs rollback planes; prompt-dependent (OLMoE: repetition +3.3%, prose −4.3%) |
 | `--drop-in-prefill` (with drop 0.75) | Cyber-Tiel | **−11.6%** vs drop alone | **Keep-off** — measured harmful | churns a cold cache, decode faults 26.6 → 158.5/tok |
-| `--prefetch 1` | gpt-oss (device) | **~−50%** (2× slowdown) | **Keep-off** — refuted | premise refuted: popularity signal too weak at top-2 (~908 vs 587 MiB/token speculated) |
-| `--predict-prefetch` | Qwen3-30B (device) | **−21%** matched re-run (−38% raw, thermally contaminated) | **Keep-off** — refuted | acting on the predictor refuted; the predictor's own accuracy is proven (88.6% / 80.7%) |
+| `--prefetch 1` | gpt-oss (device) · Qwen3.6 (host) | **~−50%** (2× slowdown) · **−24%** (1.916 → 1.456 tok/s) | **Keep-off** — refuted in both regimes | premise refuted: popularity signal too weak at top-2 (~908 vs 587 MiB/token speculated); on host, speculative reads evict demanded pages — faults 50 → 245/tok |
+| `--predict-prefetch` | Qwen3-30B (device) · Qwen3.6 (host, retention-only) | **−21%** matched re-run (−38% raw, thermally contaminated) · **−16%** retention-only | **Keep-off** — refuted in both regimes | acting on the predictor refuted; the predictor's own accuracy is proven (88.6% / 80.7%) — and retention-only still loses: faults drop 3.4× (50 → 14.8/tok) but the observer tax exceeds the saved faults even on the deepest-thrash cell |
 
-Still unmeasured: `--release-mmap` (load-peak metric only — the last open row). **Verdicts:** `On` = measured default; `Use-when` = pays only in its named regime; `Keep-off` = refuted or superseded. Keep-off knobs stay in the CLI default-off on purpose — they are the instruments their refutations were measured with, and removal would orphan the evidence and invite re-implementation; the refuted verdict lives in this table, in `--help`, and in the findings docs. Negative rows are kept on purpose: a refuted knob documented is a knob nobody re-litigates.
+**Verdicts:** `On` = measured default; `Use-when` = pays only in its named regime; `Keep-off` = refuted or superseded. Keep-off knobs stay in the CLI default-off on purpose — they are the instruments their refutations were measured with, and removal would orphan the evidence and invite re-implementation; the refuted verdict lives in this table, in `--help`, and in the findings docs. Negative rows are kept on purpose: a refuted knob documented is a knob nobody re-litigates.
 
 ## Summary, conclusions, recommendations
 
