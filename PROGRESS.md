@@ -166,6 +166,10 @@ Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` l
    then publish the carrier-gate note to the substitution row in
    `docs/host-benchmarks.md` (patch flow) + arc record. If a cell OOMs or fails:
    rerun that script alone (datasets persist in `~/llm/data/`).
+   *Interim (session 19): MMLU cells DONE — L0 66.0%, L0.15 67.0% (neutral, clean
+   pass); HumanEval L0 in progress. MMLU evidence already committed as safety net
+   at `bench-data/qgate-cyber-2026-09-21/` (scan clean); land the HumanEval cell
+   JSONs there at collect time too.*
 2. **Restore the LFM2.5 daily driver** after the gate finishes (it is DOWN for
    the run): command in Environment state.
 3. **Opencode re-test with `--auto-echo`** on the restored LFM2.5 daily driver
