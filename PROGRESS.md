@@ -6,90 +6,64 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-20 (session 18). Phase: **scoreboard carries
-verdicts; keep-off policy is ADR'd**. Published chain on fork/main:
-`790d364` → `a81106b` → `e4345ad` → `ab16ff5` (scoreboard) → `3aecace`
-(Verdict columns). Upstream: #29085 READY FOR REVIEW — user monitors CI.*
-*One-line status: every scoreboard row now has a **Verdict** — `On` (measured
-default), `Use-when` (pays only in its named regime), `Keep-off` (refuted or
-superseded). ADR-005 (arc): keep-off knobs STAY in the CLI default-off — they
-are the instruments their refutations were measured with; removal would orphan
-the evidence and invite re-implementation. Backlog unchanged: only
-`--release-mmap` (load metric) + the Cyber-Tiel substitution quality gate.*
+*Resume last rewritten: 2026-09-21 (session 19). Phase: **regime closure done;
+--release-mmap published; Cyber-Tiel quality gate in flight**. Published chain
+on fork/main: `790d364` → `a81106b` → `e4345ad` → `ab16ff5` (scoreboard) →
+`3aecace` (Verdict columns) → **`35b7dbe` (release-mmap row + keep-off regime
+closures)**. Upstream: #29085 READY FOR REVIEW — user monitors CI.*
+*One-line status: the ADR-005 stress test ran. Both keep-off refutations held
+in-regime on host: `--prefetch 1` −24% on Qwen3.6 (faults 50→245/tok — worse
+than device) and `--predict-prefetch` retention-only −16% (faults 3.4× lower —
+the mechanism works — but the observer tax still exceeds the saved faults on
+the friendliest cell we own). The last open scoreboard row FLIPPED POSITIVE:
+`--release-mmap` +5.2% on Qwen3.6 (1.916→2.015 tok/s, faults 50→0.83/tok,
+decode reads −24%, cache hit +2.8 pts). The Cyber-Tiel substitution quality
+gate (tinyMMLU + HumanEval, λ=0/0.15) is RUNNING in tmux `qgate` (~3 h) —
+collect per Next actions 1 before publishing anything about λ on the carrier.*
 
 ## State delta (this session)
 
-- **Swap verified:** 8.0Gi total, 658Mi used; fstab line 12 intact, stale
-  `/swapfile_extra` line gone. Impact doctrine in Environment below: thrash
-  profiles unchanged (file-backed eviction never touches swap), c5-class anon
-  over-commits now complete instead of OOM, majflt/tok stays the pressure guard.
-- **Cyber-Tiel batch (bench binary `bench/host-rs`, 256 greedy tok, per-cell
-  load):** base 1.884 tok/s (21.9 majflt/tok, stall 0.180). `--mtp` 1.982
-  (**+5.2%**: 51.3% accept, 2.51 tok/verify — steps cut ~60% but the cell stays
-  flash-bound; speculation pays on compute-bound profiles). drop-0.75 2.493
-  (**+32.3%**, stall halved — the published recipe, quantified on the carrier).
-  drop-0.75 + `--drop-in-prefill` 2.203 (**−11.6% vs drop alone**, decode majflt
-  26.6→158.5 — prefill dropping churns the cold cache: keep it OFF).
-  `--expert-substitute 0.15` **2.773 (+47.2%)**: 18.1% of slots reranked resident
-  (14788/81920), stall 0.180→0.060 — biggest single win measured on this host;
-  lossy, quality gate on record is Qwen3.6's (substitution doc), carrier text
-  ungated until the same gate runs here.
-- **LFM2.5 × `--ngram` (bench binary):** 7.566 → **8.143 (+7.6%)**, 48.5% accept
-  — **speculative verify composes with the rs rollback planes** (disjoint state,
-  clean win); majflt rise (0.2→18.8) is cheap page-cache re-read on fits-RAM.
-- **Qwen3.6 × `--io-two-wave` (bench binary):** 1.763 → **2.208 (+25.2%)**,
-  majflt/tok 175.3 → **34.6 (5.1× collapse)** — the last untabled knob pays on
-  the worst thrash cell.
-- **serve.md triage (closed, no action):** docs/serve.md + docs/adr/ + MISTAKES.md
-  are deliberately PR-scoped — serve.md was born on the serve-bridge commits
-  (d83d153 preserve_reasoning → 57c654e auto-echo → 39cc706 the aider
-  canonicalize limit) and ships with the arc's PR, not via the bench-evidence
-  publish flow.
-- **Ops note:** bench cells are metrics-only — generated text does not reach the
-  logs, so the lossy substitution row points at the substitution doc's quality-
-  gate protocol instead of a char diff. Raw evidence: `/tmp/feat-ab/` (CSVs +
-  logs per cell).
-- **Aider edit-turn reuse — PROVEN (post-queue item b):** real aider session over
-  the serve bridge (Ling-mini, whole edit format, no auto-commits). Server
-  TELEMETRY per call: turn A call 1 (cold) 857/0/51.5 s; turn A call 2 (aider's
-  edit-confirm round) 231/**625**/11.9 s; **turn B: 576 prompt / 504 reused /
-  20.7 s prefill** — cross-edit-turn reuse at 87.5%, divergence anchored at the
-  re-sent changed file snapshot, exactly the prefix-diff design's prediction.
-  Both edits correct (`subtract()`, `multiply_check()`), existing code untouched.
-  Aider recipe: `OPENAI_API_KEY=dummy aider --model openai/bmoe-local
-  --openai-api-base http://127.0.0.1:8017/v1 --no-auto-commits --yes-always`.
-- **Ling-mini arch noted:** `bailingmoe2` (server load line).
-- **Environment restored:** daily driver LFM2.5 UP on :8017 with --auto-echo
-  (health ok); aider/serve-lm tmux sessions killed; `~/aider-test` left with both
-  edits applied, uncommitted (fixture state).
-- **Session 18 (this): Verdict columns + ADR-005.** Scoreboard rows got
-  `On` / `Use-when` / `Keep-off` verdicts (published `3aecace`, 1 file
-  +22/−23, verified against the worktree). ADR-005 written + indexed on the
-  arc: refuted/harmful knobs (`--prefetch`, `--predict-prefetch`,
-  `--drop-in-prefill`, `--dense-odirect`) stay in the CLI default-off; the
-  verdict is documentation (scoreboard + `--help` + findings), not deletion;
-  overturning requires a new matched pair + explicit verdict flip. App exposure
-  checked: only default-off experimental rungs — no shipping path turns a
-  keep-off knob on.
-- (Session-14 details — evidence-table refresh `eb8ec6a` — live in the session-14
-  history entry.)
+- **ADR-005 stress test (Qwen3.6 regime batch, bench binary, 256 greedy tok,
+  per-cell load, base anchor 1.916 tok/s @ 50.0 majflt/tok):** `--prefetch 1`
+  1.456 (**−24.0%**, faults 244.9/tok — speculative reads evict demanded pages;
+  refutation transfers, worse than device). `--predict-prefetch
+  --predict-spec-max 0` (retention-only, zero flash) 1.612 (**−15.9%**) —
+  faults 14.8/tok (**3.4× lower: the retention mechanism works**) but the
+  observer tax still exceeds the saved faults; verdict stands, now
+  regime-complete. Both rows updated in the scoreboard (`35b7dbe`).
+- **`--release-mmap` (same batch): 2.015 tok/s (+5.2%)**, majflt/tok **0.83**
+  (60× collapse), decode reads 18.3→13.9 GiB (−24%), cache hit 84.5→87.3%,
+  load 7 s faster — the mapping's dense pages stop competing with the expert
+  cache for page cache. Scoreboard: lossless table, **Use-when past-RAM/
+  thrash**; method-doc matrix row 8 closed. Last open row closed — the
+  scoreboard is now fully measured.
+- **Cyber-Tiel substitution quality gate — IN FLIGHT** (tmux `qgate`,
+  started 08:29): `scripts/tinymmlu-bench.py` then `scripts/humaneval-bench.py`,
+  each `--lambda 0 --lambda 0.15 --threads 4` on the bench binary + the
+  Cyber-Tiel MTP Q4_K_M; datasets fetched to `~/llm/data/` (tinyMMLU parquet
+  178 KB, HumanEval.jsonl.gz 44 877 B / 164 problems — provenance + regen in
+  Environment). Result goes to the substitution row's quality column (today it
+  says "this cell's text ungated").
+- **Source-of-record caveat discovered en route:** the quality-gate datasets
+  were NOT on this host — the substitution doc's tables were produced elsewhere
+  (or /tmp evidence died). Datasets now live in `~/llm/data/` so the gate is
+  reproducible here.
 
 ## Artifacts touched (this session)
 
 | File | What |
 |---|---|
-| `PROGRESS.md` | this rewrite + the session-15 history entry |
-| `scripts/host-bench-feature-results.patch` | the feature-A/B section + method-matrix update published as e4345ad |
-| `scripts/host-bench-scoreboard.patch` | the feature scoreboard (lossless/lossy best-per-feature tables) published as ab16ff5 |
-| `scripts/host-bench-verdicts.patch` | the Verdict columns published as 3aecace |
-| `docs/adr/005-keep-off-features-policy.md` | the keep-off policy ADR (arc-scoped; indexed in docs/README.md) |
-| `/tmp/feat-ab/{olmoe,cyber,lfm,q36}/` | raw A/B evidence: CSVs + logs per cell (regenerable via the recipes in the history) |
-| `PROGRESS.md` | this rewrite + the session-17 history entry |
+| `PROGRESS.md` | this rewrite + the session-19 history entry (at wrap-up) |
+| `scripts/host-bench-relmmap.patch` | the --release-mmap row + keep-off regime closures, published as `35b7dbe` |
+| `~/llm/data/tinyMMLU-test.parquet` | tinyBenchmarks tinyMMLU test split (100 rows) — quality-gate input |
+| `~/llm/data/HumanEval.jsonl.gz` | canonical HumanEval (164 problems) — quality-gate input |
+| `/tmp/feat-ab/q36-regime/` | raw regime-batch evidence (CSV + log per cell) |
+| `/tmp/feat-ab/cyber-qgate/` | quality-gate outputs (tinymmlu/, humaneval/, stage.txt, done.txt) |
 | Kept | `/tmp/lp-verify/` (mismatch runner), `~/git/lp-ci/` (~9 GB, removable after #29085 lands), `/tmp/nemotron-budget-issue-draft.md` (user's to post) |
 
-Arc state: `feat/session-residency` == `fork/feat/session-residency` at `c6db52b`
-(verified this session); the session-14 record commit goes on top and is pushed at
-wrap-up. The `core/src/engine/session.cpp` pos0 port stays
+Arc state: `feat/session-residency` == `fork/feat/session-residency` at `b83e657`
+(the session-18 record); this session's PROGRESS rewrite is on top, uncommitted
+until wrap-up. The `core/src/engine/session.cpp` pos0 port stays
 working-tree-only — NEVER commit it; stash it for pin builds and the ctest gate.
 Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` links);
 `fix/lfm2-rs-reserve` @ `74e1ee6de` = the #29085 branch (READY FOR REVIEW);
@@ -97,6 +71,18 @@ Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` l
 
 ## Environment state
 
+- **Quality-gate datasets** `~/llm/data/`: `tinyMMLU-test.parquet` (HF
+  tinyBenchmarks/tinyMMLU `data/test-00000-of-00001.parquet`, 178 082 B) +
+  `HumanEval.jsonl.gz` (openai/human-eval fetched via the GitHub **API** blob
+  endpoint — codeload and raw are blocked by the proxy; base64-decode
+  `content`, 44 877 B, 164 problems). Reader: `/tmp/evalvenv` (regen:
+  `python3 -m venv /tmp/evalvenv && /tmp/evalvenv/bin/pip install pyarrow
+  pandas`) — system python is PEP-668 blocked (no pyarrow) and CANNOT read the
+  parquet; the gate scripts must run under `/tmp/evalvenv/bin/python`.
+- **Daily driver during the quality gate: DOWN** (killed for RAM). Restore
+  when the gate finishes: `setsid nohup python3 -u scripts/bmoe-serve.py -m
+  ~/llm/models/LFM2.5-8B-A1B-UD-Q4_K_M.gguf --engine-args "--ctx-size 8192
+  --chatml" --auto-echo --port 8017 > /tmp/bmoe-serve.log 2>&1 &`.
 - **Swap**: RESIZED 2026-09-20 (user ran the sudo): `/swap.img` now 8G (658Mi used at
   verification), permanent via fstab line 12; stale `/swapfile_extra` line removed.
   Impact doctrine: thrash profiles are UNCHANGED (model pages are file-backed — they
@@ -104,7 +90,8 @@ Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` l
   snapshot/KV over-commits that used to OOM now complete. Guard unchanged: majflt/tok
   stays the pressure sensor before any perf claim (a config error that used to fail
   fast now degrades slowly instead).
-  LFM2.5 daily driver: `setsid nohup python3 -u scripts/bmoe-serve.py -m ~/llm/models/LFM2.5-8B-A1B-UD-Q4_K_M.gguf --engine-args "--ctx-size 8192 --chatml" --auto-echo --port 8017 > /tmp/bmoe-serve.log 2>&1 &`
+  LFM2.5 daily driver (standing recipe; currently DOWN for the quality gate —
+  see the bullet above): `setsid nohup python3 -u scripts/bmoe-serve.py -m ~/llm/models/LFM2.5-8B-A1B-UD-Q4_K_M.gguf --engine-args "--ctx-size 8192 --chatml" --auto-echo --port 8017 > /tmp/bmoe-serve.log 2>&1 &`
   (Ling-mini alternative in the history; `--auto-echo` only for thinking models; run it
   inside tmux — background processes die between tool calls here).
 - **Models** (`~/llm/models/`): Ling-mini-2.0, LFM2.5-8B-A1B-UD-Q4_K_M (note: no plain
@@ -162,26 +149,30 @@ Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` l
 
 ## Next actions (ordered)
 
-1. **#29085 is READY FOR REVIEW — the user monitors its CI** (do not poll it
+1. **Collect the Cyber-Tiel quality gate** when `/tmp/feat-ab/cyber-qgate/done.txt`
+   exists (`cat stage.txt` — both rc must be 0): read the per-cell tables in
+   `tinymmlu/` + `humaneval/`, compare λ=0 vs λ=0.15 (MMLU accuracy, HE pass@1),
+   then publish the carrier-gate note to the substitution row in
+   `docs/host-benchmarks.md` (patch flow) + arc record. If a cell OOMs or fails:
+   rerun that script alone (datasets persist in `~/llm/data/`).
+2. **Restore the LFM2.5 daily driver** after the gate finishes (it is DOWN for
+   the run): command in Environment state.
+3. **Opencode re-test with `--auto-echo`** on the restored LFM2.5 daily driver
+   (last post-queue item).
+4. **#29085 is READY FOR REVIEW — the user monitors its CI** (do not poll it
    proactively). When it merges: reopen PR #29117 (humanize first —
-   `/tmp/pr-index-shift-description-draft.md` is the tool draft), then submodule bump
-   + full byte-identity gates + `bmoe-rsbench reserve` re-run (ADR-001 bump rule).
-   Watch #28976 (WebGPU GDN) for the snapshot-slot contract. When #197 merges: the
-   stacked-PR plan (Open questions 1). After the PR lands: free ~9 GB —
-   `git worktree remove --force ~/git/lp-ci` (keep `ci-results/` logs).
-2. **User: post the Nemotron-H/H_MOE issue** from `/tmp/nemotron-budget-issue-draft.md`
-   (own wording; AI-content rule). Record the issue number here when posted.
-3. **Bench queue COMPLETE — post-queue work:** (a) ~~docs refresh~~ DONE
-   (`eb8ec6a`); (b) ~~aider edit-turn reuse~~ DONE — 504/576 cross-turn reuse
-   proven, recipe in the session-15 history entry; (c) **opencode re-test with
-   `--auto-echo` on the LFM2.5 daily driver (UP now)**; (d) ~~daily driver on
-   :8017~~ DONE; (e) README feature tables refreshed at every wrap-up (rule 6
-   lives there). If new models arrive later, the per-model protocol now also lives
-   in `docs/benchmark-method.md` §"The host campaign" (MAXTOK ladder, echo
-   first-follow-up check, `depth=` on refusals, 3-arg cellc + mkdir OUTDIR).
-4. **Kill-process rule (docs/MISTAKES.md):** never chain `pkill -f <pat>` with
-   follow-up statements — bracket the pattern (`pkill -f "[c]ellc.sh"`) or run it
-   standalone and assert afterwards.
+   `/tmp/pr-index-shift-description-draft.md` is the tool draft), then submodule
+   bump + full byte-identity gates + `bmoe-rsbench reserve` re-run (ADR-001
+   bump rule). Watch #28976 (WebGPU GDN) for the snapshot-slot contract. When
+   #197 merges: the stacked-PR plan (Open questions 1). After the PR lands:
+   free ~9 GB — `git worktree remove --force ~/git/lp-ci` (keep `ci-results/`
+   logs).
+5. **User: post the Nemotron-H/H_MOE issue** from
+   `/tmp/nemotron-budget-issue-draft.md` (own wording; AI-content rule). Record
+   the issue number here when posted.
+6. **Kill-process rule (docs/MISTAKES.md):** never chain `pkill -f <pat>` with
+   follow-up statements — bracket the pattern (`pkill -f "[c]ellc.sh"`) or run
+   it standalone and assert afterwards.
 
 
 ## Resume gates (all must assert positives)
