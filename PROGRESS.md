@@ -6,63 +6,60 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-22 (session 20, wrap-up rewrite). Phase:
-**docs: recipes.md completed to the full eight-model matrix; tables collapsible —
-published to fork/main**. Published chain on fork/main: `…38746cf` → **`52b3e64`
-(recipes.md: all 8 models + collapsed tables; host-benchmarks.md cell tables
-collapsed)**. Upstream: #29085 READY FOR REVIEW — user monitors CI.*
-*One-line status: `docs/recipes.md` now covers all eight measured models — 6 new
-sections (Ornith, Qwen3.6, Qwen3-30B, Laguna-XS, Ling-mini, OLMoE) joining Cyber-Tiel
-and LFM2.5, TOC regrouped past-RAM vs fits-RAM with the pattern stated up top; all 8
-per-flag tables in recipes.md and all 8 raw cell tables in host-benchmarks.md are now
-collapsed `<details>` blocks (user request: default collapsed). Numbers copied
-exclusively from the already-published scoreboard rows; the only non-host quality
-numbers are the two device-protocol substitution gates (clearly marked). Publish flow
-needed the session-19 fix again: commit-the-new-file-in-the-worktree (the publisher's
-apply-check cannot create new files; patches `host-bench-recipes-full.patch` +
-`host-bench-collapse.patch` on the arc are the record, both verified byte-identical
-pre-push). Next: restore the LFM2.5 daily driver (Next action 1), opencode re-test,
-multiple-choice skill live check.*
+*Resume last rewritten: 2026-09-22 (session 21, wrap-up rewrite). Phase:
+**docs: collapse bug fixed + per-model serve commands — published to fork/main**.
+Published chain on fork/main: `…52b3e64` → **`2bcdab6` (host-benchmarks.md stray
+`<details>` fixed; recipes.md per-model served/multi-turn commands)**. Upstream:
+#29085 READY FOR REVIEW — user monitors CI.*
+*One-line status: two follow-ups to the recipes publish, both landed. (1) The
+"page-wide collapse" the user reported was a stray raw `<details>` in
+host-benchmarks.md's intro prose ("…its own <details> below…") — GitHub pairs it
+with the first per-model `</details>`, collapsing everything between; fixed by
+code-quoting it. The 8 real per-model tables were never wrapped page-wide and stay
+collapsed per-model. (2) recipes.md: each model's "Add for served / multi-turn
+sessions" paragraph now opens with a `bmoe-serve.py` command block (single-shot
+recipe + served command + the why-notes that remain), per user request. Arc record
+committed AND pushed this time (user asked for the push). Next: restore the LFM2.5
+daily driver (Next action 1), opencode re-test, multiple-choice skill live check.*
 
 ## State delta (this session)
 
-- **`docs/recipes.md` completed to the eight-model matrix + collapsible tables
-  (user request; published `52b3e64` on fork/main).** Six new per-model sections
-  (Ornith 1.5, Qwen3.6-35B, Qwen3-30B, Laguna-XS-2.1, Ling-mini-2.0, OLMoE-1B-7B)
-  joined the existing Cyber-Tiel and LFM2.5 recipes, in the established shape:
-  recommended flag set, per-flag provenance table, two-metric totals. TOC regrouped
-  by memory regime (past-RAM vs fits-RAM) with the cross-model pattern stated at the
-  top: past-RAM buys bmoe-main's decode (+42–70% streaming, +47% substitute);
-  fits-RAM keeps the stack off (−6% to −31%) and takes the fork's session layer
-  (warmup ~10–56×). All 8 per-flag tables in recipes.md AND all 8 raw cell tables in
-  host-benchmarks.md are now collapsed `<details>` blocks (default-collapsed, per the
-  user's choice of "per-flag tables only" in recipes and "both docs" for the wrap).
-  A short intro note in host-benchmarks.md explains the collapse and points at
-  recipes.md. Every number copied from already-published rows — the one judgment
-  call: Qwen3.6's substitution row cites the device-protocol quality gate from
-  `cache-aware-substitution.md` (the host A/B ran on Cyber-Tiel), marked as such.
-- **Publish-flow lesson (second occurrence, now the standard fix):** the publisher's
-  `git apply --check` cannot CREATE a new file (patch context of a fresh recipes.md
-  rewrite). Fix per session 19: `git add` + commit inside the throwaway worktree,
-  rule-7 scan run manually on the staged diff (clean), ancestry assert origin/main ⊂
-  fork/main (OK), push HEAD:main. Both patches archived on the arc:
-  `scripts/host-bench-recipes-full.patch` (recipes.md as new-file diff) +
-  `scripts/host-bench-collapse.patch` (the 8 cell-table wraps) — both applied to a
-  scratch repo and byte-diffed against the worktree before push, and the landed tree
-  diffed against the worktree after (`git show fork/main:<file>`).
-- **Prior-session state (session 19, unchanged this session):** Cyber-Tiel
-  substitution gate verdict (neutral on both tests, warm +161%), the
-  provenance correction (bmoe-main vs fork vs mainline), the LFM2.5 recipe, the
-  --release-mmap and ADR-005 regime rows, and the two MISTAKES.md entries all
-  stand as published on fork/main through `38746cf`.
+- **host-benchmarks.md collapse bug fixed (published `2bcdab6` on fork/main).**
+  User reported the lower part of the page collapsing as one block. Root cause: the
+  session-20 intro sentence contained a bare `<details>` in prose; GitHub's HTML
+  pairing married it to the first per-model `</details>` (Ornith, line 187), so the
+  scoreboard + summary + first model all sat inside one accidental block. Fix: quote
+  the token (`` `<details>` ``) so it renders as text. The 8 intentional per-model
+  wrappers are balanced (8 open / 8 close) and keep the requested behavior — only
+  the per-model tables collapse, not "the entire lower part".
+- **recipes.md per-model serve commands added (same commit).** Every model's
+  "Add for served / multi-turn sessions" paragraph now leads with a bash block:
+  `python3 scripts/bmoe-serve.py -m <model> [--auto-echo] --engine-args "<engine
+  flags>"`, then the (shortened) why-notes. `--auto-echo` present only where the
+  verdict says On (Ornith, Cyber-Tiel, LFM2.5); Qwen3.6/Laguna/Qwen3-30B/Ling-mini/
+  OLMoE run without it per their rows. Engine args mirror each model's single-shot
+  recipe plus `--ctx-size 16384 --ubatch 512` and `--rs-seq 64` where eligible;
+  fits-RAM models carry just `--ubatch 512` (LMF2.5 adds `--rs-seq 64`),
+  `--ngram` noted in prose as the workload add-on. `--ctx-size 16384` is the bench
+  protocol default (scoreboard footnote), not a per-model measurement.
+- **Publish flow worked as designed for once:** both changes were edits to existing
+  files, so the standard patch path applied cleanly (no session-19/20 new-file
+  workaround needed). Patches archived on the arc:
+  `scripts/host-bench-details-fix.patch` (17 lines) +
+  `scripts/recipes-serve-blocks.patch` (184 lines); landed tree diffed
+  byte-identical against the worktree after push.
+- **Prior-session state (session 20, unchanged):** recipes.md eight-model matrix,
+  all 16 collapsible tables, the session-19/20 publish lessons, Cyber-Tiel gate
+  verdict, provenance legend — all stand as published on fork/main through
+  `52b3e64`.
 
 ## Artifacts touched (this session)
 
 | File | What |
 |---|---|
-| `PROGRESS.md` | this rewrite + the session-20 history entry (at wrap-up) |
-| `scripts/host-bench-recipes-full.patch` | recipes.md completed to 8 models (archived new-file diff), landed as `52b3e64` |
-| `scripts/host-bench-collapse.patch` | the 8 host-benchmarks.md cell-table wraps (same commit) |
+| `PROGRESS.md` | this rewrite + the session-21 history entry (at wrap-up) |
+| `scripts/host-bench-details-fix.patch` | the stray-tag fix in host-benchmarks.md, landed as `2bcdab6` |
+| `scripts/recipes-serve-blocks.patch` | the 8 recipes.md serve-command blocks (same commit) |
 | `bench-data/qgate-cyber-2026-09-21/` | the complete gate evidence (4 cell files + stage records) — commits `45d7000`, `083afba`, wrap-up |
 | `~/llm/data/tinyMMLU-test.parquet` | tinyBenchmarks tinyMMLU test split (100 rows) — quality-gate input |
 | `~/llm/data/HumanEval.jsonl.gz` | canonical HumanEval (164 problems) — quality-gate input |
@@ -71,8 +68,8 @@ multiple-choice skill live check.*
 | Kept | `/tmp/lp-verify/` (mismatch runner), `~/git/lp-ci/` (~9 GB, removable after #29085 lands), `/tmp/nemotron-budget-issue-draft.md` (user's to post) |
 
 Arc state: `feat/session-residency` == `fork/feat/session-residency` at `b83e657`
-(the session-18 record); this session's PROGRESS rewrite is on top, uncommitted
-until wrap-up. The `core/src/engine/session.cpp` pos0 port stays
++ this session's wrap-up commit (session-21 record, PUSHED — user asked for the
+push in this flow). The `core/src/engine/session.cpp` pos0 port stays
 working-tree-only — NEVER commit it; stash it for pin builds and the ctest gate.
 Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` links);
 `fix/lfm2-rs-reserve` @ `74e1ee6de` = the #29085 branch (READY FOR REVIEW);
@@ -1268,4 +1265,41 @@ touched).
   (`git diff --stat <pre> fork/main` + `git show fork/main:<file>`).
 
 **State:** fork/main through `38746cf`; arc push at wrap-up. Session ends
+here; next session opens at Next actions 1 (LFM2.5 driver restore).
+
+## 2026-09-22 — Session 21: collapse bug fixed, per-model serve commands — published `2bcdab6`
+
+User follow-ups to session 20's publish, both landed on fork/main in one commit
+(`2bcdab6`):
+
+1. **host-benchmarks.md: the "entire lower part collapses" report.** Not a missing
+   `</details>` and not an intentional page-wide wrapper — the session-20 intro
+   sentence contained a **bare `<details>` token in prose** ("…its own <details>
+   below…"). GitHub pairs a stray opener with the next closer, so scoreboard +
+   summary + the Ornith section all rendered inside one accidental block (the first
+   per-model `</details>` at line 187 closed it). Fix: code-quote the token. Verified
+   after: 8 open / 8 close, no raw HTML tokens left in prose in either doc. Lesson
+   generalizeable: **in these two docs, never write an HTML tag token unquoted in
+   prose** — they are the only HTML on the page, so the parser takes them literally.
+2. **recipes.md: served/multi-turn command per model.** The user asked for a second
+   bash block per model and a shorter paragraph. Each "Add for served / multi-turn
+   sessions" now leads with `python3 scripts/bmoe-serve.py -m <model> [--auto-echo]
+   --engine-args "…"` and keeps only the why-notes as prose. `--auto-echo` included
+   only where the per-flag verdict says On (Ornith, Cyber-Tiel, LFM2.5); omitted
+   where it is refuted/no-op (Qwen3.6, Laguna, Qwen3-30B, Ling-mini, OLMoE). Engine
+   args mirror the single-shot recipe; `--ctx-size 16384 --ubatch 512` are the
+   protocol defaults (scoreboard footnote), `--rs-seq 64` only on the hybrid cells
+   (the plain transformers have nothing for it to fix). Fits-RAM models carry just
+   `--ubatch 512` in engine args; `--ngram` stays a prose note (workload add-on).
+   Flags cross-checked against `scripts/bmoe-serve.py`'s argparse before publishing.
+
+**Publish mechanics:** both targets were existing files, so the standard
+`publish-host-bench.sh` patch path worked first try (the session-19/20 new-file
+workaround was NOT needed). Patches archived on the arc:
+`scripts/host-bench-details-fix.patch` + `scripts/recipes-serve-blocks.patch`;
+landed tree diffed byte-identical against the worktree (`git show fork/main:<file>`)
+after push.
+
+**State:** fork/main through `2bcdab6`; arc push DONE this session (user asked:
+"push the arc record when most convenient") — arc at wrap-up commit. Session ends
 here; next session opens at Next actions 1 (LFM2.5 driver restore).
