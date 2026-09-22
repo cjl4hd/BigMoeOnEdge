@@ -6,114 +6,63 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-21 (session 19, wrap-up rewrite). Phase:
-**Cyber-Tiel quality gate COMPLETE — verdict published; substitution is
-quality-neutral on its carrier**. Published chain on fork/main: `790d364` →
-`a81106b` → `e4345ad` → `ab16ff5` (scoreboard) → `3aecace` (Verdict columns) →
-`35b7dbe` (release-mmap row) → **`8ec6e72` (Cyber-Tiel gate: neutral on both
-tests, warm-session +161%)** → **`6f4ccab`+`849aeb5` (recipes.md: per-model
-recipes, provenance, TOCs)** → **`b4f96cf` (provenance corrected to
-bmoe-main vs fork vs mainline; two-metric totals)** → **`38746cf` (LFM2.5
-recipe: fits-RAM contrast)**. Upstream: #29085 READY FOR
-REVIEW — user monitors CI.*
-*One-line status: the gate finished all four cells. tinyMMLU 66.0% → 67.0%
-and HumanEval pass@1 43/50 → 43/50 (40 problems pass in both arms, 3 swap
-each way — net zero): the +47.2% substitution win is now quality-gated on
-BOTH models that claim it (Qwen3.6, Cyber-Tiel). The gate harness's
-warm-session regime measured the speed side too: 0.955 → 2.492 tok/s
-(+161%), cache hit 49.5% → 85.7%, flash reads/token 288 → 56 MiB. One
-incident en route, recorded in MISTAKES.md: the driver's rc=1 was post-run
-cleanup noise — artifacts, not exit codes, declare a bench run dead. Next:
-restore the LFM2.5 daily driver (Next action 1), opencode re-test,
-multiple-choice skill live check. Post-gate docs work: `docs/recipes.md`
-published (per-model runnable configs, provenance per flag, two-metric
-totals; Cyber-Tiel + LFM2.5) with a TOC added to host-benchmarks.md —
-near-miss en route (diff-only publish dropped the
-untracked recipes.md; caught by the landed-tree assert) recorded in
-MISTAKES.md, and the first provenance draft was corrected same-day after
-the user's attribution challenge (bmoe-main, not fork, owns the engine).
-Recipes docs archived as patches on the arc.*
+*Resume last rewritten: 2026-09-22 (session 20, wrap-up rewrite). Phase:
+**docs: recipes.md completed to the full eight-model matrix; tables collapsible —
+published to fork/main**. Published chain on fork/main: `…38746cf` → **`52b3e64`
+(recipes.md: all 8 models + collapsed tables; host-benchmarks.md cell tables
+collapsed)**. Upstream: #29085 READY FOR REVIEW — user monitors CI.*
+*One-line status: `docs/recipes.md` now covers all eight measured models — 6 new
+sections (Ornith, Qwen3.6, Qwen3-30B, Laguna-XS, Ling-mini, OLMoE) joining Cyber-Tiel
+and LFM2.5, TOC regrouped past-RAM vs fits-RAM with the pattern stated up top; all 8
+per-flag tables in recipes.md and all 8 raw cell tables in host-benchmarks.md are now
+collapsed `<details>` blocks (user request: default collapsed). Numbers copied
+exclusively from the already-published scoreboard rows; the only non-host quality
+numbers are the two device-protocol substitution gates (clearly marked). Publish flow
+needed the session-19 fix again: commit-the-new-file-in-the-worktree (the publisher's
+apply-check cannot create new files; patches `host-bench-recipes-full.patch` +
+`host-bench-collapse.patch` on the arc are the record, both verified byte-identical
+pre-push). Next: restore the LFM2.5 daily driver (Next action 1), opencode re-test,
+multiple-choice skill live check.*
 
 ## State delta (this session)
 
-- **ADR-005 stress test (Qwen3.6 regime batch, bench binary, 256 greedy tok,
-  per-cell load, base anchor 1.916 tok/s @ 50.0 majflt/tok):** `--prefetch 1`
-  1.456 (**−24.0%**, faults 244.9/tok — speculative reads evict demanded pages;
-  refutation transfers, worse than device). `--predict-prefetch
-  --predict-spec-max 0` (retention-only, zero flash) 1.612 (**−15.9%**) —
-  faults 14.8/tok (**3.4× lower: the retention mechanism works**) but the
-  observer tax still exceeds the saved faults; verdict stands, now
-  regime-complete. Both rows updated in the scoreboard (`35b7dbe`).
-- **`--release-mmap` (same batch): 2.015 tok/s (+5.2%)**, majflt/tok **0.83**
-  (60× collapse), decode reads 18.3→13.9 GiB (−24%), cache hit 84.5→87.3%,
-  load 7 s faster — the mapping's dense pages stop competing with the expert
-  cache for page cache. Scoreboard: lossless table, **Use-when past-RAM/
-  thrash**; method-doc matrix row 8 closed. Last open row closed — the
-  scoreboard is now fully measured.
-- **Cyber-Tiel substitution quality gate — COMPLETE, verdict PUBLISHED
-  (`8ec6e72` on fork/main): quality-neutral on both tests.** tinyMMLU
-  66.0% → 67.0% (λ=0 → λ=0.15); HumanEval pass@1 **43/50 → 43/50** (40 pass
-  both, 3 swap each way — net zero). Speed side in the same warm-session
-  regime: 0.955 → 2.492 tok/s (**+161%**), cache hit 49.5% → 85.7%, flash
-  reads/token 288 → 56 MiB (−81%). Full evidence:
-  `bench-data/qgate-cyber-2026-09-21/` (all four cell files committed).
-- **The substitution row's "ungated" caveat is CLOSED**: gated on two
-  architectures (Qwen3.6, Cyber-Tiel) — `docs/host-benchmarks.md` scoreboard
-  row + Cyber-Tiel cell bullet updated; `docs/cache-aware-substitution.md`
-  quality-evidence paragraph updated (one architecture → two). Patch on
-  record: `scripts/host-bench-qgate-cyber.patch`.
-- **MISTAKES.md entries (2):** driver rc=1 ≠ run failure — artifacts declare a bench
-  run dead, never exit codes (the gate's rc=1 was post-run cleanup noise; all
-  cells complete). And: the publish flow's `git diff` capture is untracked-blind
-  — recipes.md was nearly published as dangling links; the landed-tree assert
-  (`git show fork/main:<file>`) caught it one step later.
-- **`docs/recipes.md` published (`6f4ccab`+`849aeb5` on fork/main):** per-model
-  runnable configurations, starting with Cyber-Tiel — recommended flag set and
-  the two totals vs the mmap baseline. **Provenance CORRECTED same day
-  (`b4f96cf`):** the first draft claimed "ours" for the whole engine — wrong.
-  Git-verified against `origin/main`: the streaming stack, substitute, drop,
-  mtp, io-two-wave, release-mmap and the expert-ready seam commit are ALL
-  bmoe-main's (Helldez's engine; not ours to claim); upstream ngram-mod is
-  ggerganov's (PR #19164, not ours-merged as first written); the FORK's
-  contribution is the session-residency layer only (`--rs-seq`/bridge/warmup/
-  auto-echo + seam PR #29085). Totals split per user's framing: (1) bmoe vs
-  llama +115% decode (1.29→2.77, all bmoe-main mechanisms); (2) fork vs
-  bmoe-main = session/turn latency (divergence prefill 2.2×, follow-ups ~4×
-  lower; decode contribution 0% by design). `host-benchmarks.md` gained a
-  Contents TOC and a pointer at the Cyber-Tiel table; `docs/README.md` indexes
-  the doc. Patches on record: `scripts/host-bench-recipes-doc.patch`,
-  `scripts/host-bench-recipes-provenance-fix.patch`.
-- **LFM2.5 recipe added (`38746cf` on fork/main):** the fits-RAM contrast
-  case — streaming stack **Off** (−10.8%, nothing to fix at 0 faults),
-  `--ngram` Use-when repetitive (+7.6%, mainline machinery), and the fork's
-  session layer as the primary value: warmup 6.8× (7.59→1.12 s), follow-ups
-  ~6× lower, `--rs-seq` divergence 2.3× (2.82→1.25 s). The two recipes
-  establish the pattern: past-RAM buys bmoe-main's decode (+115%);
-  fits-RAM takes the fork's session latency. Patch on record:
-  `scripts/host-bench-lfm-recipe.patch`.
-- **Source-of-record caveat discovered en route:** the quality-gate datasets
-  were NOT on this host — the substitution doc's tables were produced elsewhere
-  (or /tmp evidence died). Datasets now live in `~/llm/data/` so the gate is
-  reproducible here.
-- **Side task: `multiple-choice` skill shipped** (machine-level, `cjl4hd/skills`):
-  one-token logprob classification (label + renormalized confidence) — the
-  tinymmlu-gate technique generalized to triage/scans/routing. Authored in
-  `~/skills` (`5d08f25` + YAML-quoting fix, batch helper `mc_classify.py`
-  mock-verified end-to-end), installed to `~/.agents/skills` + `.claude` shim.
-  Same session: canonical-repo housekeeping — project-lifecycle consolidation
-  (`1507da3`) and websearch finally tracked (`7747290`). **PENDING:** live
-  verification against a real endpoint (post-gate; see Next actions).
+- **`docs/recipes.md` completed to the eight-model matrix + collapsible tables
+  (user request; published `52b3e64` on fork/main).** Six new per-model sections
+  (Ornith 1.5, Qwen3.6-35B, Qwen3-30B, Laguna-XS-2.1, Ling-mini-2.0, OLMoE-1B-7B)
+  joined the existing Cyber-Tiel and LFM2.5 recipes, in the established shape:
+  recommended flag set, per-flag provenance table, two-metric totals. TOC regrouped
+  by memory regime (past-RAM vs fits-RAM) with the cross-model pattern stated at the
+  top: past-RAM buys bmoe-main's decode (+42–70% streaming, +47% substitute);
+  fits-RAM keeps the stack off (−6% to −31%) and takes the fork's session layer
+  (warmup ~10–56×). All 8 per-flag tables in recipes.md AND all 8 raw cell tables in
+  host-benchmarks.md are now collapsed `<details>` blocks (default-collapsed, per the
+  user's choice of "per-flag tables only" in recipes and "both docs" for the wrap).
+  A short intro note in host-benchmarks.md explains the collapse and points at
+  recipes.md. Every number copied from already-published rows — the one judgment
+  call: Qwen3.6's substitution row cites the device-protocol quality gate from
+  `cache-aware-substitution.md` (the host A/B ran on Cyber-Tiel), marked as such.
+- **Publish-flow lesson (second occurrence, now the standard fix):** the publisher's
+  `git apply --check` cannot CREATE a new file (patch context of a fresh recipes.md
+  rewrite). Fix per session 19: `git add` + commit inside the throwaway worktree,
+  rule-7 scan run manually on the staged diff (clean), ancestry assert origin/main ⊂
+  fork/main (OK), push HEAD:main. Both patches archived on the arc:
+  `scripts/host-bench-recipes-full.patch` (recipes.md as new-file diff) +
+  `scripts/host-bench-collapse.patch` (the 8 cell-table wraps) — both applied to a
+  scratch repo and byte-diffed against the worktree before push, and the landed tree
+  diffed against the worktree after (`git show fork/main:<file>`).
+- **Prior-session state (session 19, unchanged this session):** Cyber-Tiel
+  substitution gate verdict (neutral on both tests, warm +161%), the
+  provenance correction (bmoe-main vs fork vs mainline), the LFM2.5 recipe, the
+  --release-mmap and ADR-005 regime rows, and the two MISTAKES.md entries all
+  stand as published on fork/main through `38746cf`.
 
 ## Artifacts touched (this session)
 
 | File | What |
 |---|---|
-| `PROGRESS.md` | this rewrite + the session-19 history entry (at wrap-up) |
-| `scripts/host-bench-relmmap.patch` | the --release-mmap row + keep-off regime closures, published as `35b7dbe` |
-| `scripts/host-bench-qgate-cyber.patch` | the Cyber-Tiel gate verdict rows, published as `8ec6e72` |
-| `scripts/host-bench-recipes-doc.patch` | the recipes doc + TOCs publish patch (regenerated to cover all 3 files), landed as `6f4ccab`+`849aeb5` |
-| `scripts/host-bench-recipes-provenance-fix.patch` | the provenance correction (bmoe-main vs fork vs mainline, two-metric totals), landed as `b4f96cf` |
-| `scripts/host-bench-lfm-recipe.patch` | the LFM2.5 recipe section, landed as `38746cf` |
+| `PROGRESS.md` | this rewrite + the session-20 history entry (at wrap-up) |
+| `scripts/host-bench-recipes-full.patch` | recipes.md completed to 8 models (archived new-file diff), landed as `52b3e64` |
+| `scripts/host-bench-collapse.patch` | the 8 host-benchmarks.md cell-table wraps (same commit) |
 | `bench-data/qgate-cyber-2026-09-21/` | the complete gate evidence (4 cell files + stage records) — commits `45d7000`, `083afba`, wrap-up |
 | `~/llm/data/tinyMMLU-test.parquet` | tinyBenchmarks tinyMMLU test split (100 rows) — quality-gate input |
 | `~/llm/data/HumanEval.jsonl.gz` | canonical HumanEval (164 problems) — quality-gate input |
@@ -1257,6 +1206,46 @@ substitution quality gate. #29085 READY FOR REVIEW (user monitors CI).
 now the best-evidenced lossy knob in the engine: two-model quality gate, both
 neutral, +47% (cold) / +161% (warm) measured. Backlog: LFM2.5 driver restore,
 opencode re-test, skill live check. #29085 with user.
+
+### 2026-09-22 — Session 20: recipes.md completed to the eight-model matrix; tables collapsed
+
+- User request: "update the recipe markdown with all of the results we have; make
+  the tables collapsible, default collapsed." Clarified up front (3 questions):
+  collapse the per-flag tables only inside recipes.md, also wrap host-benchmarks.md's
+  per-model cell tables, publish directly per the established flow.
+- **recipes.md rebuilt (`52b3e64` on fork/main):** six new sections — Ornith 1.5,
+  Qwen3.6-35B, Qwen3-30B, Laguna-XS-2.1, Ling-mini-2.0, OLMoE-1B-7B — in the
+  Cyber-Tiel/LFM2.5 shape (recommended recipe, per-flag provenance table,
+  two-metric totals). TOC regrouped past-RAM vs fits-RAM, the cross-model pattern
+  stated at the top (past-RAM: bmoe-main decode +42–70% streaming / +47%
+  substitute; fits-RAM: stack off −6% to −31%, fork session layer warmup ~10–56×).
+  Content rules held: every number copied from the published scoreboard rows
+  (nothing re-measured); the two quality gates quoted with their protocol named
+  (bench-cold vs device-protocol gate — Qwen3.6's substitution row cites the
+  device gate, the only non-host numbers in the doc, marked as such); per-model
+  "not measured here" rows point at the sibling model that carries the number.
+- **Collapsible tables (GitHub-flavored `<details>`, default collapsed):** all 8
+  per-flag tables in recipes.md; all 8 raw cell tables in host-benchmarks.md, with
+  a one-paragraph intro note (open for commits/fault columns; bullets carry the
+  interpretation; recipes.md link). Feature scoreboard tables stay expanded —
+  they ARE the summary.
+- **Publish flow:** the publisher's `git apply --check` cannot create a new file
+  (second occurrence of the session-19 untracked-new-file gap — recipes.md was
+  rewritten wholesale). Standard fix applied: rule-7 scan on the staged diff
+  (clean), ancestry assert origin/main ⊂ fork/main (OK), commit inside the
+  throwaway worktree, push HEAD:main. Patches archived on the arc
+  (`scripts/host-bench-recipes-full.patch`, `scripts/host-bench-collapse.patch`),
+  verified two ways: scratch-repo apply + byte-diff vs worktree before push, and
+  landed-tree diff vs worktree after (`git show fork/main:<file>`). Worktree
+  `pub-recipes` removed after the push.
+- First wrapping attempt put every `<details>` block AFTER its table (0- vs
+  1-indexed line numbers); caught by re-reading the rendered section before any
+  publish, worktree file reset, wrapper rewritten to locate table ends properly.
+
+**State:** fork/main through `52b3e64`; arc record this commit. Environment
+unchanged from session 19 (daily driver still DOWN for the gate — restore is Next
+action 1; gates not re-run this session: docs-only change, no engine or script
+touched).
 
 ### 2026-09-21 — Session 19 (cont. 2): recipes doc — provenance corrected, LFM2.5 added
 
