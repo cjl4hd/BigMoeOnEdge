@@ -12,7 +12,9 @@ quality-neutral on its carrier**. Published chain on fork/main: `790d364` →
 `a81106b` → `e4345ad` → `ab16ff5` (scoreboard) → `3aecace` (Verdict columns) →
 `35b7dbe` (release-mmap row) → **`8ec6e72` (Cyber-Tiel gate: neutral on both
 tests, warm-session +161%)** → **`6f4ccab`+`849aeb5` (recipes.md: per-model
-recipes with provenance + totals; TOCs)**. Upstream: #29085 READY FOR
+recipes, provenance, TOCs)** → **`b4f96cf` (provenance corrected to
+bmoe-main vs fork vs mainline; two-metric totals)** → **`38746cf` (LFM2.5
+recipe: fits-RAM contrast)**. Upstream: #29085 READY FOR
 REVIEW — user monitors CI.*
 *One-line status: the gate finished all four cells. tinyMMLU 66.0% → 67.0%
 and HumanEval pass@1 43/50 → 43/50 (40 problems pass in both arms, 3 swap
@@ -24,11 +26,13 @@ incident en route, recorded in MISTAKES.md: the driver's rc=1 was post-run
 cleanup noise — artifacts, not exit codes, declare a bench run dead. Next:
 restore the LFM2.5 daily driver (Next action 1), opencode re-test,
 multiple-choice skill live check. Post-gate docs work: `docs/recipes.md`
-published (per-model runnable configs, ours-vs-mainline provenance per
-flag, total speedup vs baseline; Cyber-Tiel first) with a TOC added to
-host-benchmarks.md — near-miss en route (diff-only publish dropped the
+published (per-model runnable configs, provenance per flag, two-metric
+totals; Cyber-Tiel + LFM2.5) with a TOC added to host-benchmarks.md —
+near-miss en route (diff-only publish dropped the
 untracked recipes.md; caught by the landed-tree assert) recorded in
-MISTAKES.md.*
+MISTAKES.md, and the first provenance draft was corrected same-day after
+the user's attribution challenge (bmoe-main, not fork, owns the engine).
+Recipes docs archived as patches on the arc.*
 
 ## State delta (this session)
 
@@ -79,6 +83,14 @@ MISTAKES.md.*
   Contents TOC and a pointer at the Cyber-Tiel table; `docs/README.md` indexes
   the doc. Patches on record: `scripts/host-bench-recipes-doc.patch`,
   `scripts/host-bench-recipes-provenance-fix.patch`.
+- **LFM2.5 recipe added (`38746cf` on fork/main):** the fits-RAM contrast
+  case — streaming stack **Off** (−10.8%, nothing to fix at 0 faults),
+  `--ngram` Use-when repetitive (+7.6%, mainline machinery), and the fork's
+  session layer as the primary value: warmup 6.8× (7.59→1.12 s), follow-ups
+  ~6× lower, `--rs-seq` divergence 2.3× (2.82→1.25 s). The two recipes
+  establish the pattern: past-RAM buys bmoe-main's decode (+115%);
+  fits-RAM takes the fork's session latency. Patch on record:
+  `scripts/host-bench-lfm-recipe.patch`.
 - **Source-of-record caveat discovered en route:** the quality-gate datasets
   were NOT on this host — the substitution doc's tables were produced elsewhere
   (or /tmp evidence died). Datasets now live in `~/llm/data/` so the gate is
@@ -101,6 +113,7 @@ MISTAKES.md.*
 | `scripts/host-bench-qgate-cyber.patch` | the Cyber-Tiel gate verdict rows, published as `8ec6e72` |
 | `scripts/host-bench-recipes-doc.patch` | the recipes doc + TOCs publish patch (regenerated to cover all 3 files), landed as `6f4ccab`+`849aeb5` |
 | `scripts/host-bench-recipes-provenance-fix.patch` | the provenance correction (bmoe-main vs fork vs mainline, two-metric totals), landed as `b4f96cf` |
+| `scripts/host-bench-lfm-recipe.patch` | the LFM2.5 recipe section, landed as `38746cf` |
 | `bench-data/qgate-cyber-2026-09-21/` | the complete gate evidence (4 cell files + stage records) — commits `45d7000`, `083afba`, wrap-up |
 | `~/llm/data/tinyMMLU-test.parquet` | tinyBenchmarks tinyMMLU test split (100 rows) — quality-gate input |
 | `~/llm/data/HumanEval.jsonl.gz` | canonical HumanEval (164 problems) — quality-gate input |
@@ -1244,3 +1257,26 @@ substitution quality gate. #29085 READY FOR REVIEW (user monitors CI).
 now the best-evidenced lossy knob in the engine: two-model quality gate, both
 neutral, +47% (cold) / +161% (warm) measured. Backlog: LFM2.5 driver restore,
 opencode re-test, skill live check. #29085 with user.
+
+### 2026-09-21 — Session 19 (cont. 2): recipes doc — provenance corrected, LFM2.5 added
+
+- User challenged the provenance framing: anything the fork inherited from
+  Helldez's BigMoeOnEdge is not the fork's to claim. Git-verified against
+  `origin/main`, commit authors, and upstream PRs: the streaming engine, its
+  compute/io knobs, and the expert-ready seam commit are ALL bmoe-main's;
+  upstream ngram-mod is ggerganov's (#19164 — the first draft's "ours merged
+  upstream" was a misattribution); the fork owns the session-residency layer
+  only (`--rs-seq`, bridge, warmup, `--auto-echo`, seam PR #29085).
+  Published as `b4f96cf` with the two-metric totals: (1) bmoe vs llama
+  +115% decode (all bmoe-main mechanisms); (2) fork vs bmoe-main =
+  session/turn latency (2.2×/4× on Cyber-Tiel), decode 0% by design.
+- LFM2.5 recipe published (`38746cf`): fits-RAM contrast — bmoe-main stack
+  off (−10.8%), mainline ngram +7.6%, fork session layer primary (6.8× warmup,
+  ~6× follow-ups, 2.3× divergence). Two recipes → one pattern: model size
+  decides which layer pays.
+- Publish-flow lesson reinforced: new files committed in the worktree before
+  patch capture; landed tree asserted after every push
+  (`git diff --stat <pre> fork/main` + `git show fork/main:<file>`).
+
+**State:** fork/main through `38746cf`; arc push at wrap-up. Session ends
+here; next session opens at Next actions 1 (LFM2.5 driver restore).
