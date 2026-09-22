@@ -23,6 +23,14 @@ branches until #197 merges — the cell (c) rows were measured from the arc tree
 | **b) bmoe streaming** | `--moe-stream --cache-mb auto --io-threads 4 --overlap --dense-weights anon` (the engine's lossless stack) |
 | **c) bmoe + llama-side features** | (b) served over the bridge with session residency: warmup replay, `--auto-echo` append reuse; engine built on the `bench/host-rs` llama branch (recurrent snapshot rollback fixes) with `--rs-seq` eligible |
 
+## Contents
+
+- [Feature scoreboard — best measured result per feature](#feature-scoreboard--best-measured-result-per-feature)
+- [Summary, conclusions, recommendations](#summary-conclusions-recommendations)
+- Models: [Ornith 1.5](#ornith-15-35b-qwen35-family-moe-202-gb-2-host-ram) · [Cyber-Tiel](#cyber-tiel-coder-35b-a3b-qwen35-family-moe-coder-210-gb-2-host-ram-the-mtp-carrier-for-a-future---mtp-host-row) · [LFM2.5](#lfm25-8b-a1b-lfm-hybrid-moe-50-gb-fits-host-ram-comfortably--the-contrast-case) · [Laguna-XS](#laguna-xs-21-arch-laguna-moe-189-gb-2-host-ram--the-matrixs-first-non-hybrid) · [Ling-mini](#ling-mini-20-arch-bailingmoe2-moe-99-gb--barely-fits-host-ram-the-edge-case) · [Qwen3-30B](#qwen3-30b-a3b-arch-qwen3moe-moe-186-gb-2-host-ram--the-reference-thinker) · [Qwen3.6](#qwen36-35b-a3b-arch-qwen35moe-moe-221-gb-2-host-ram--the-matrixs-deepest-thrash-and-its-first-honest-rewind-refusal) · [OLMoE](#olmoe-1b-7b-arch-olmoe-moe-40-gb-fits-host-ram-comfortably--completes-the-fits-ram-trio)
+- [Feature A/B: the compute/latency-hiding layer](#feature-ab-the-computelatency-hiding-layer-2026-09-20)
+- Runnable configurations per model: [recipes.md](recipes.md)
+
 ## Feature scoreboard — best measured result per feature
 
 One row per engine feature: the model where it measured best, the delta, and what to read the
@@ -207,6 +215,10 @@ Reading the cells:
   structurally" claim holds only for the echo mechanism, not for rewind.
 
 ## Cyber-Tiel-Coder-35B-A3B (Qwen3.5-family MoE coder, 21.0 GB, ~2× host RAM; the MTP carrier for a future `--mtp` host row)
+
+> The runnable configuration for this model — the joined flag set, flag provenance
+> (ours vs mainline), and the total speedup vs the mmap baseline — lives in
+> [recipes.md](recipes.md#cyber-tiel-coder-35b-a3b-qwen35-family-moe-coder-210-gb-2-host-ram).
 
 | Cell | Engine commit | load s | prefill s | tok/s | flash/token | cache hit | majflt/tok |
 |---|---|---:|---:|---:|---:|---:|---:|
