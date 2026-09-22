@@ -6,20 +6,23 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-09-21 (session 19). Phase: **regime closure done;
---release-mmap published; Cyber-Tiel quality gate in flight**. Published chain
-on fork/main: `790d364` → `a81106b` → `e4345ad` → `ab16ff5` (scoreboard) →
-`3aecace` (Verdict columns) → **`35b7dbe` (release-mmap row + keep-off regime
-closures)**. Upstream: #29085 READY FOR REVIEW — user monitors CI.*
-*One-line status: the ADR-005 stress test ran. Both keep-off refutations held
-in-regime on host: `--prefetch 1` −24% on Qwen3.6 (faults 50→245/tok — worse
-than device) and `--predict-prefetch` retention-only −16% (faults 3.4× lower —
-the mechanism works — but the observer tax still exceeds the saved faults on
-the friendliest cell we own). The last open scoreboard row FLIPPED POSITIVE:
-`--release-mmap` +5.2% on Qwen3.6 (1.916→2.015 tok/s, faults 50→0.83/tok,
-decode reads −24%, cache hit +2.8 pts). The Cyber-Tiel substitution quality
-gate (tinyMMLU + HumanEval, λ=0/0.15) is RUNNING in tmux `qgate` (~3 h) —
-collect per Next actions 1 before publishing anything about λ on the carrier.*
+*Resume last rewritten: 2026-09-21 (session 19, wrap-up rewrite). Phase:
+**Cyber-Tiel quality gate COMPLETE — verdict published; substitution is
+quality-neutral on its carrier**. Published chain on fork/main: `790d364` →
+`a81106b` → `e4345ad` → `ab16ff5` (scoreboard) → `3aecace` (Verdict columns) →
+`35b7dbe` (release-mmap row) → **`8ec6e72` (Cyber-Tiel gate: neutral on both
+tests, warm-session +161%)**. Upstream: #29085 READY FOR REVIEW — user
+monitors CI.*
+*One-line status: the gate finished all four cells. tinyMMLU 66.0% → 67.0%
+and HumanEval pass@1 43/50 → 43/50 (40 problems pass in both arms, 3 swap
+each way — net zero): the +47.2% substitution win is now quality-gated on
+BOTH models that claim it (Qwen3.6, Cyber-Tiel). The gate harness's
+warm-session regime measured the speed side too: 0.955 → 2.492 tok/s
+(+161%), cache hit 49.5% → 85.7%, flash reads/token 288 → 56 MiB. One
+incident en route, recorded in MISTAKES.md: the driver's rc=1 was post-run
+cleanup noise — artifacts, not exit codes, declare a bench run dead. Next:
+restore the LFM2.5 daily driver (Next action 1), opencode re-test,
+multiple-choice skill live check.*
 
 ## State delta (this session)
 
@@ -37,13 +40,21 @@ collect per Next actions 1 before publishing anything about λ on the carrier.*
   cache for page cache. Scoreboard: lossless table, **Use-when past-RAM/
   thrash**; method-doc matrix row 8 closed. Last open row closed — the
   scoreboard is now fully measured.
-- **Cyber-Tiel substitution quality gate — IN FLIGHT** (tmux `qgate`,
-  started 08:29): `scripts/tinymmlu-bench.py` then `scripts/humaneval-bench.py`,
-  each `--lambda 0 --lambda 0.15 --threads 4` on the bench binary + the
-  Cyber-Tiel MTP Q4_K_M; datasets fetched to `~/llm/data/` (tinyMMLU parquet
-  178 KB, HumanEval.jsonl.gz 44 877 B / 164 problems — provenance + regen in
-  Environment). Result goes to the substitution row's quality column (today it
-  says "this cell's text ungated").
+- **Cyber-Tiel substitution quality gate — COMPLETE, verdict PUBLISHED
+  (`8ec6e72` on fork/main): quality-neutral on both tests.** tinyMMLU
+  66.0% → 67.0% (λ=0 → λ=0.15); HumanEval pass@1 **43/50 → 43/50** (40 pass
+  both, 3 swap each way — net zero). Speed side in the same warm-session
+  regime: 0.955 → 2.492 tok/s (**+161%**), cache hit 49.5% → 85.7%, flash
+  reads/token 288 → 56 MiB (−81%). Full evidence:
+  `bench-data/qgate-cyber-2026-09-21/` (all four cell files committed).
+- **The substitution row's "ungated" caveat is CLOSED**: gated on two
+  architectures (Qwen3.6, Cyber-Tiel) — `docs/host-benchmarks.md` scoreboard
+  row + Cyber-Tiel cell bullet updated; `docs/cache-aware-substitution.md`
+  quality-evidence paragraph updated (one architecture → two). Patch on
+  record: `scripts/host-bench-qgate-cyber.patch`.
+- **MISTAKES.md entry:** driver rc=1 ≠ run failure — artifacts declare a bench
+  run dead, never exit codes (the gate's rc=1 was post-run cleanup noise; all
+  cells complete).
 - **Source-of-record caveat discovered en route:** the quality-gate datasets
   were NOT on this host — the substitution doc's tables were produced elsewhere
   (or /tmp evidence died). Datasets now live in `~/llm/data/` so the gate is
@@ -63,10 +74,12 @@ collect per Next actions 1 before publishing anything about λ on the carrier.*
 |---|---|
 | `PROGRESS.md` | this rewrite + the session-19 history entry (at wrap-up) |
 | `scripts/host-bench-relmmap.patch` | the --release-mmap row + keep-off regime closures, published as `35b7dbe` |
+| `scripts/host-bench-qgate-cyber.patch` | the Cyber-Tiel gate verdict rows, published as `8ec6e72` |
+| `bench-data/qgate-cyber-2026-09-21/` | the complete gate evidence (4 cell files + stage records) — commits `45d7000`, `083afba`, wrap-up |
 | `~/llm/data/tinyMMLU-test.parquet` | tinyBenchmarks tinyMMLU test split (100 rows) — quality-gate input |
 | `~/llm/data/HumanEval.jsonl.gz` | canonical HumanEval (164 problems) — quality-gate input |
 | `/tmp/feat-ab/q36-regime/` | raw regime-batch evidence (CSV + log per cell) |
-| `/tmp/feat-ab/cyber-qgate/` | quality-gate outputs (tinymmlu/, humaneval/, stage.txt, done.txt) |
+| `/tmp/feat-ab/cyber-qgate/` | quality-gate outputs — FULLY BANKED to `bench-data/qgate-cyber-2026-09-21/`; regenerable by rerunning the gate scripts; safe to delete |
 | Kept | `/tmp/lp-verify/` (mismatch runner), `~/git/lp-ci/` (~9 GB, removable after #29085 lands), `/tmp/nemotron-budget-issue-draft.md` (user's to post) |
 
 Arc state: `feat/session-residency` == `fork/feat/session-residency` at `b83e657`
@@ -143,7 +156,7 @@ Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` l
    `gh pr create --repo Helldez/BigMoeOnEdge --base main --head cjl4hd:feat/session-residency`.
    Fallback if #197 stalls: fork-internal PR (`--repo cjl4hd --base feat/serve-bridge-arm64`), retarget later.
 2. **PR #29085 — READY FOR REVIEW; the user monitors CI.** When merged, the playbook
-   in Next actions 1 applies (reopen #29117 → submodule bump + full byte-identity
+   in Next actions 4 applies (reopen #29117 → submodule bump + full byte-identity
    gates + `bmoe-rsbench reserve` re-run). If a reviewer can't reproduce the assert
    on current master: the shortfall manifests config-dependently at tip (session-10
    history) — the durable argument is the classification fix + the new fixture
@@ -160,26 +173,13 @@ Engine-side branches: `bench/host-rs` on cjl4hd/llama.cpp (what `build-bench/` l
 
 ## Next actions (ordered)
 
-1. **Collect the Cyber-Tiel quality gate** when `/tmp/feat-ab/cyber-qgate/done.txt`
-   exists (`cat stage.txt` — both rc must be 0): read the per-cell tables in
-   `tinymmlu/` + `humaneval/`, compare λ=0 vs λ=0.15 (MMLU accuracy, HE pass@1),
-   then publish the carrier-gate note to the substitution row in
-   `docs/host-benchmarks.md` (patch flow) + arc record. If a cell OOMs or fails:
-   rerun that script alone (datasets persist in `~/llm/data/`).
-   *Interim (session 19): MMLU cells DONE — L0 66.0%, L0.15 67.0% (neutral, clean
-   pass); HumanEval L0 DONE — 43/50 = 86% (matches the Qwen3.6 anchor). The
-   original tmux chain DIED between HE cells (rc=1, empty done.txt, scrollback
-   lost — no per-cell log existed). Relaunch: HE λ=0.15 ONLY, tmux `qgate15`,
-   driver output now captured to `humaneval/driver_L015.log` (lesson: the
-   per-cell log is the durable error surface). MMLU + HE L0 evidence committed
-   at `bench-data/qgate-cyber-2026-09-21/` (scan clean); land HE L0.15 there at
-   collect time too.*
-2. **Restore the LFM2.5 daily driver** after the gate finishes (it is DOWN for
-   the run): command in Environment state.
-3. **Opencode re-test with `--auto-echo`** on the restored LFM2.5 daily driver
+1. **Restore the LFM2.5 daily driver** (gate done, it is DOWN for the run):
+   launch command in Environment state — then assert UP per the MISTAKES rule
+   (`pgrep -f "[b]moe-serve.py"`) and record the PID here before wrap-up.
+2. **Opencode re-test with `--auto-echo`** on the restored LFM2.5 daily driver
    (last post-queue item).
-3b. **Verify the `multiple-choice` skill live** (needs an endpoint — after the
-   gate): logprobs round-trip through the bridge on :8017 (does it forward
+3. **Verify the `multiple-choice` skill live** (endpoint unblocked now):
+   logprobs round-trip through the bridge on :8017 (does it forward
    `top_logprobs`? does the think-block garble a thinking model's first
    token?), direct `bmoe-cli --server` as fallback; then the demo: ~50
    judgment items, probe vs short-generation cost + agreement, per the SKILL.md.
@@ -1185,3 +1185,36 @@ rungs — no shipping path turns a keep-off knob on.
 **State:** published chain now `…ab16ff5` → `3aecace` on fork/main; arc record
 this commit. Backlog unchanged: `--release-mmap` load metric, Cyber-Tiel
 substitution quality gate. #29085 READY FOR REVIEW (user monitors CI).
+
+### 2026-09-21 — Session 19 (cont.): Cyber-Tiel substitution gate COMPLETE — neutral; verdict published (`8ec6e72`)
+
+- **All four cells finished** (two driver chains; the first died between HE
+  cells, λ=0.15 relaunched alone — valid per protocol, each cell is its own
+  engine load): tinyMMLU λ=0 **66.0%** / λ=0.15 **67.0%**; HumanEval λ=0
+  **43/50** / λ=0.15 **43/50**. Per-problem A/B: 40 pass in both arms, 3 swap
+  each way (L0-only: 32/38/41; L0.15-only: 6/20/39) — net zero, the
+  definition of quality-neutral.
+- **Speed in the gate's warm-session regime** (the regime the knob targets):
+  λ=0 0.955 tok/s / 49.5% cache hit / 288 MiB read per generated token →
+  λ=0.15 2.492 tok/s (+161%) / 85.7% / 55.6 MiB. The bench cell's +47.2%
+  (cold sessions) and the gate's +161% (warm edit-turns) bracket the knob's
+  real-world payoff.
+- **Published `8ec6e72` → fork/main** via the patch flow (identifying-data
+  scan clean): the scoreboard substitution row now carries "+161% warm" +
+  "gated on two models, both neutral"; the Cyber-Tiel cell bullet's "ungated
+  until the same gate runs on Cyber-Tiel" caveat replaced by the verdict;
+  `cache-aware-substitution.md` quality-evidence paragraph: one architecture
+  → two. Patch on record: `scripts/host-bench-qgate-cyber.patch`.
+- **Incident + lesson:** the driver exited rc=1 on both chains (post-run
+  cleanup); the first rc=1 was read as "run died" and drove a failure
+  investigation; artifacts proved every cell complete. MISTAKES.md: artifacts,
+  never exit codes, declare a bench run dead — and the driver log captured to
+  a file is the durable error surface.
+- **Evidence banked** at `bench-data/qgate-cyber-2026-09-21/` (all four cell
+  files + stage records; scan clean per rule 7): commits `45d7000`, `083afba`,
+  + the wrap-up.
+
+**State:** fork/main through `8ec6e72`; arc push at wrap-up. Substitution is
+now the best-evidenced lossy knob in the engine: two-model quality gate, both
+neutral, +47% (cold) / +161% (warm) measured. Backlog: LFM2.5 driver restore,
+opencode re-test, skill live check. #29085 with user.

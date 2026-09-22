@@ -53,3 +53,29 @@ UP/DOWN" claim in the resume is backed by a process assertion, not by teardown
 intent: `pgrep -f "[b]moe-serve.py" && echo UP || echo DOWN`. Never claim teardown
 without the assert — `tmux kill-session` does not kill setsid-reparented children;
 kill the recorded PID (`kill <pid>`), then assert the process is gone.
+
+## 2026-09-21 — bench driver `rc=1` was post-run cleanup noise, not a cell failure
+
+**What failed:** the Cyber-Tiel gate driver exited rc=1 after the HumanEval λ=0 cell
+(first chain — the λ=0.15 cell never started) and again after the relaunched λ=0.15
+cell completed. The rc was read as "the run died / the cell may never have run": a
+relaunch was ordered, a failure investigation started, and the record briefly
+described a completed gate as dead. The collected artifacts proved every cell had
+finished with full, valid output — the nonzero exit came from the driver's post-run
+cleanup (the only hypothesis consistent with complete cell output + rc=1 + no OOM
+trace), which runs after the measured work and whose failure says nothing about it.
+
+**Root cause:** exit code was treated as the verdict before reading the artifacts.
+A driver's rc summarizes its *last command*, not the experiment; the measured cells
+write their own evidence independently of the driver's exit path.
+
+**Cost:** one unnecessary relaunch decision, a misrecorded incident ("gate died,
+cause unknown"), and hours of needless doubt about valid evidence.
+
+**Prevention rule (checkable):** a bench "failure" is asserted from the captured
+per-cell artifacts, never from exit code alone — before declaring a run dead, list
+the output dir and parse the per-cell JSON/JSONL (count rows), declaring failure
+only when a cell's artifacts are absent or truncated. The driver log captured to a
+file is the durable error surface (per-session rule); its tail is read before any
+relaunch. Exit codes triage *how* a run failed only after the artifacts prove
+*whether* it did.
