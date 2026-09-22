@@ -11,8 +11,9 @@ Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git 
 quality-neutral on its carrier**. Published chain on fork/main: `790d364` →
 `a81106b` → `e4345ad` → `ab16ff5` (scoreboard) → `3aecace` (Verdict columns) →
 `35b7dbe` (release-mmap row) → **`8ec6e72` (Cyber-Tiel gate: neutral on both
-tests, warm-session +161%)**. Upstream: #29085 READY FOR REVIEW — user
-monitors CI.*
+tests, warm-session +161%)** → **`6f4ccab`+`849aeb5` (recipes.md: per-model
+recipes with provenance + totals; TOCs)**. Upstream: #29085 READY FOR
+REVIEW — user monitors CI.*
 *One-line status: the gate finished all four cells. tinyMMLU 66.0% → 67.0%
 and HumanEval pass@1 43/50 → 43/50 (40 problems pass in both arms, 3 swap
 each way — net zero): the +47.2% substitution win is now quality-gated on
@@ -22,7 +23,12 @@ warm-session regime measured the speed side too: 0.955 → 2.492 tok/s
 incident en route, recorded in MISTAKES.md: the driver's rc=1 was post-run
 cleanup noise — artifacts, not exit codes, declare a bench run dead. Next:
 restore the LFM2.5 daily driver (Next action 1), opencode re-test,
-multiple-choice skill live check.*
+multiple-choice skill live check. Post-gate docs work: `docs/recipes.md`
+published (per-model runnable configs, ours-vs-mainline provenance per
+flag, total speedup vs baseline; Cyber-Tiel first) with a TOC added to
+host-benchmarks.md — near-miss en route (diff-only publish dropped the
+untracked recipes.md; caught by the landed-tree assert) recorded in
+MISTAKES.md.*
 
 ## State delta (this session)
 
@@ -52,9 +58,18 @@ multiple-choice skill live check.*
   row + Cyber-Tiel cell bullet updated; `docs/cache-aware-substitution.md`
   quality-evidence paragraph updated (one architecture → two). Patch on
   record: `scripts/host-bench-qgate-cyber.patch`.
-- **MISTAKES.md entry:** driver rc=1 ≠ run failure — artifacts declare a bench
+- **MISTAKES.md entries (2):** driver rc=1 ≠ run failure — artifacts declare a bench
   run dead, never exit codes (the gate's rc=1 was post-run cleanup noise; all
-  cells complete).
+  cells complete). And: the publish flow's `git diff` capture is untracked-blind
+  — recipes.md was nearly published as dangling links; the landed-tree assert
+  (`git show fork/main:<file>`) caught it one step later.
+- **`docs/recipes.md` published (`6f4ccab`+`849aeb5` on fork/main):** per-model
+  runnable configurations, starting with Cyber-Tiel — recommended flag set,
+  provenance per flag (ours / ours-in-the-seam / ours-merged-upstream /
+  mainline), and the total vs the mmap baseline (+115% cold: 1.29 → 2.77 tok/s).
+  `host-benchmarks.md` gained a Contents TOC and a pointer at the Cyber-Tiel
+  table; `docs/README.md` indexes the new doc. Patch on record:
+  `scripts/host-bench-recipes-doc.patch` (all 3 files, after regeneration).
 - **Source-of-record caveat discovered en route:** the quality-gate datasets
   were NOT on this host — the substitution doc's tables were produced elsewhere
   (or /tmp evidence died). Datasets now live in `~/llm/data/` so the gate is
@@ -75,6 +90,7 @@ multiple-choice skill live check.*
 | `PROGRESS.md` | this rewrite + the session-19 history entry (at wrap-up) |
 | `scripts/host-bench-relmmap.patch` | the --release-mmap row + keep-off regime closures, published as `35b7dbe` |
 | `scripts/host-bench-qgate-cyber.patch` | the Cyber-Tiel gate verdict rows, published as `8ec6e72` |
+| `scripts/host-bench-recipes-doc.patch` | the recipes doc + TOCs publish patch (regenerated to cover all 3 files), landed as `6f4ccab`+`849aeb5` |
 | `bench-data/qgate-cyber-2026-09-21/` | the complete gate evidence (4 cell files + stage records) — commits `45d7000`, `083afba`, wrap-up |
 | `~/llm/data/tinyMMLU-test.parquet` | tinyBenchmarks tinyMMLU test split (100 rows) — quality-gate input |
 | `~/llm/data/HumanEval.jsonl.gz` | canonical HumanEval (164 problems) — quality-gate input |

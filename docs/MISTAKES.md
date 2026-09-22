@@ -79,3 +79,31 @@ only when a cell's artifacts are absent or truncated. The driver log captured to
 file is the durable error surface (per-session rule); its tail is read before any
 relaunch. Exit codes triage *how* a run failed only after the artifacts prove
 *whether* it did.
+
+## 2026-09-21 — the publish flow's diff-only capture misses untracked files (recipes.md nearly shipped dangling links)
+
+**What failed:** publishing the recipes doc via the patch flow, the new file
+`docs/recipes.md` was written into a personal worktree but the patch was generated
+with `git diff` — which is **untracked-blind**. The published commit contained only
+the two modified files (TOC + README entry, both linking to `recipes.md`); the file
+itself never made it. Caught within one step by asserting the landed file set
+(`git show fork/main:docs/recipes.md` → missing), fixed by committing the file in
+the worktree and rebasing onto the real tip.
+
+**Root cause:** `git diff` shows tracked modifications only. A new file with no
+`git add` is invisible to it, and a successful push was being read as "everything
+published". Contributing factor: the publish script applies patches in its own
+throwaway worktree, so the agent's personal worktree stayed at the pre-publish ref
+and its untracked file was never part of any commit.
+
+**Cost:** one rejected push (non-fast-forward from the sibling commit), a rebase
+detour, and a two-commit published chain where one was meant.
+
+**Prevention rule (checkable):** a publish is only done when every expected file is
+*inside* the published diff — after pushing, assert the landed set explicitly:
+`git show fork/main:<new-file>` must succeed for each new file, and
+`git diff --stat <pre-publish-ref> fork/main` must list every file the change
+touched. Either assert failing ⇒ the publish is not done, whatever the push said.
+New files get `git add`ed in the worktree *before* the patch is captured, or the
+capture command is `git add -N <new-file>` first (intent-to-add makes `git diff`
+see them).
