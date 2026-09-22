@@ -217,7 +217,8 @@ Reading the cells:
 ## Cyber-Tiel-Coder-35B-A3B (Qwen3.5-family MoE coder, 21.0 GB, ~2× host RAM; the MTP carrier for a future `--mtp` host row)
 
 > The runnable configuration for this model — the joined flag set, flag provenance
-> (ours vs mainline), and the total speedup vs the mmap baseline — lives in
+> (bmoe-main vs fork vs mainline), and the two totals (bmoe vs llama, fork vs bmoe-main)
+> — lives in
 > [recipes.md](recipes.md#cyber-tiel-coder-35b-a3b-qwen35-family-moe-coder-210-gb-2-host-ram).
 
 | Cell | Engine commit | load s | prefill s | tok/s | flash/token | cache hit | majflt/tok |

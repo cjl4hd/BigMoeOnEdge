@@ -39,7 +39,7 @@ for the idea the project is built on.
 | [benchmarks.md](benchmarks.md) | Measured results per model on Android, with device-pressure numbers. |
 | [benchmarks-gpt-oss.md](benchmarks-gpt-oss.md) | gpt-oss-120b: a 58 GB model at 5.2× device RAM, and what it costs. |
 | [benchmark-method.md](benchmark-method.md) | How to measure this engine on any machine: what each knob does, when to move it, and the rules that keep a matrix honest. |
-| [recipes.md](recipes.md) | The measured, runnable configuration per model — flags, provenance (ours vs mainline), and total speedup vs the mmap baseline. |
+| [recipes.md](recipes.md) | The measured, runnable configuration per model — flags, provenance (bmoe-main vs fork vs mainline), and the two totals (bmoe vs llama, fork vs bmoe-main). |
 | [community-benchmarks.md](community-benchmarks.md) | Results on hardware we do not own, the one-command protocol (`scripts/bench-report.sh`), and how to submit a row. |
 | [warmup-analysis.md](warmup-analysis.md) | Why first tokens are slow, and the two regimes behind it. |
 | [bench-data/](bench-data/) | Raw per-run CSVs and session notes. A dated archive — see its README. |
