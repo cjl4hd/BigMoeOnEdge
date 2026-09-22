@@ -181,5 +181,6 @@ Every number above is from a desktop, where flash is a large share of a token. O
 share is between 15 % and 56 % depending on the model and the budget, so the throughput column will
 compress, and by how much is the device A/B this feature is owed before it earns a default or a
 place outside Experimental. The quality evidence is two held-out texts, 100 tinyMMLU questions and
-50 HumanEval problems, on one model; a second architecture (Gemma 4, gpt-oss) is the obvious next
-cell.
+50 HumanEval problems, now on two architectures: Qwen3.6 and Cyber-Tiel (a Qwen3.5-family
+coder MoE) — both quality-neutral (Cyber-Tiel: tinyMMLU 66.0 % → 67.0 %, HumanEval pass@1
+43/50 → 43/50). A third architecture (Gemma 4, gpt-oss) is the obvious next cell.
