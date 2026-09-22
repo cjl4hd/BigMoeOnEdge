@@ -64,12 +64,21 @@ MISTAKES.md.*
   — recipes.md was nearly published as dangling links; the landed-tree assert
   (`git show fork/main:<file>`) caught it one step later.
 - **`docs/recipes.md` published (`6f4ccab`+`849aeb5` on fork/main):** per-model
-  runnable configurations, starting with Cyber-Tiel — recommended flag set,
-  provenance per flag (ours / ours-in-the-seam / ours-merged-upstream /
-  mainline), and the total vs the mmap baseline (+115% cold: 1.29 → 2.77 tok/s).
-  `host-benchmarks.md` gained a Contents TOC and a pointer at the Cyber-Tiel
-  table; `docs/README.md` indexes the new doc. Patch on record:
-  `scripts/host-bench-recipes-doc.patch` (all 3 files, after regeneration).
+  runnable configurations, starting with Cyber-Tiel — recommended flag set and
+  the two totals vs the mmap baseline. **Provenance CORRECTED same day
+  (`b4f96cf`):** the first draft claimed "ours" for the whole engine — wrong.
+  Git-verified against `origin/main`: the streaming stack, substitute, drop,
+  mtp, io-two-wave, release-mmap and the expert-ready seam commit are ALL
+  bmoe-main's (Helldez's engine; not ours to claim); upstream ngram-mod is
+  ggerganov's (PR #19164, not ours-merged as first written); the FORK's
+  contribution is the session-residency layer only (`--rs-seq`/bridge/warmup/
+  auto-echo + seam PR #29085). Totals split per user's framing: (1) bmoe vs
+  llama +115% decode (1.29→2.77, all bmoe-main mechanisms); (2) fork vs
+  bmoe-main = session/turn latency (divergence prefill 2.2×, follow-ups ~4×
+  lower; decode contribution 0% by design). `host-benchmarks.md` gained a
+  Contents TOC and a pointer at the Cyber-Tiel table; `docs/README.md` indexes
+  the doc. Patches on record: `scripts/host-bench-recipes-doc.patch`,
+  `scripts/host-bench-recipes-provenance-fix.patch`.
 - **Source-of-record caveat discovered en route:** the quality-gate datasets
   were NOT on this host — the substitution doc's tables were produced elsewhere
   (or /tmp evidence died). Datasets now live in `~/llm/data/` so the gate is
@@ -91,6 +100,7 @@ MISTAKES.md.*
 | `scripts/host-bench-relmmap.patch` | the --release-mmap row + keep-off regime closures, published as `35b7dbe` |
 | `scripts/host-bench-qgate-cyber.patch` | the Cyber-Tiel gate verdict rows, published as `8ec6e72` |
 | `scripts/host-bench-recipes-doc.patch` | the recipes doc + TOCs publish patch (regenerated to cover all 3 files), landed as `6f4ccab`+`849aeb5` |
+| `scripts/host-bench-recipes-provenance-fix.patch` | the provenance correction (bmoe-main vs fork vs mainline, two-metric totals), landed as `b4f96cf` |
 | `bench-data/qgate-cyber-2026-09-21/` | the complete gate evidence (4 cell files + stage records) — commits `45d7000`, `083afba`, wrap-up |
 | `~/llm/data/tinyMMLU-test.parquet` | tinyBenchmarks tinyMMLU test split (100 rows) — quality-gate input |
 | `~/llm/data/HumanEval.jsonl.gz` | canonical HumanEval (164 problems) — quality-gate input |
