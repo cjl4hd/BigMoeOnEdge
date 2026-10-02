@@ -108,16 +108,22 @@ carrier. The engine's headline numbers live here.
 
 ```bash
 bmoe-cli -m Cyber-Tiel-Coder-35B-A3B-MTP-UD-Q4_K_M.gguf \
-  --moe-stream --cache-mb auto --io-threads 4 --overlap --dense-weights anon \
-  --expert-substitute 0.15
+  --moe-stream --cache-mb 3000 --io-threads 4 --overlap --dense-weights anon \
+  --expert-substitute 0.15 --release-mmap --io-two-wave
 ```
+
+`--cache-mb 3000` rather than `auto` on a host without headroom: `auto` sizes from
+`MemAvailable` before the `anon` dense buffers are allocated, and the two stack. The
+explicit cap held swap at 3.3–3.9 GB across all three cells with no OOM on a 22.5 GB
+model. `--release-mmap` is the largest single-flag win measured on this model
+(see the table).
 
 **Add for served / multi-turn sessions** (serve bridge + engine):
 
 ```bash
 python3 scripts/bmoe-serve.py -m Cyber-Tiel-Coder-35B-A3B-MTP-UD-Q4_K_M.gguf \
   --auto-echo \
-  --engine-args "--moe-stream --cache-mb auto --io-threads 4 --overlap --dense-weights anon --expert-substitute 0.15 --ctx-size 16384 --ubatch 512 --rs-seq 64"
+  --engine-args "--moe-stream --cache-mb 3000 --io-threads 4 --overlap --dense-weights anon --expert-substitute 0.15 --release-mmap --io-two-wave --ctx-size 16384 --ubatch 512 --rs-seq 64"
 ```
 
 Warmup replay, `--auto-echo`, `--rs-seq 64` — the residency trio (fork work, on top of
@@ -132,7 +138,8 @@ the streaming engine), with the substitution recipe carried in the engine args.
 | `--expert-substitute 0.15` | **bmoe-main** | **+47.2%** (→ 2.773 tok/s); quality-neutral: tinyMMLU 66.0 → 67.0%, HumanEval pass@1 43/50 → 43/50 | **Use-when**: thrash — the biggest single decode win |
 | `--drop-cold-experts 0.75` | **bmoe-main** | **+32.3%** (→ 2.493) | **Use-when**: thrash (substitute is the bigger win; the two are not yet measured together) |
 | `--mtp --draft 3` | **bmoe-main** (mainline concept) | **+5.2%** — the cell is flash-bound, so speculation can't pay | off here; **Use-when**: compute-bound |
-| `--io-two-wave` · `--release-mmap` | **bmoe-main** | not yet measured on this model (+25.2% / +5.2% on Qwen3.6, the other deep-thrash cell) | next cells to run here |
+| `--release-mmap` | **bmoe-main** | **+26.4%** (1.970 → 2.490 tok/s, 256-tok cell, ctx 8192), majflt/tok 35.59 → **0.01**, prefill 49.5 → **42.9 s**, load 106 → 68 s. Engaged cleanly: `2 view(s) unmapped (21098 MiB), 0 section(s) closed` + `dropped 2434 MiB of now-unused mmap pages` | **On** — the biggest single-flag win here, and it beats two-wave |
+| `--io-two-wave` | **bmoe-main** | **+15.7%** (1.970 → 2.280 tok/s, same cell), majflt/tok 35.59 → 6.64 (5.4×). Prefill slightly worse (49.5 → 53.3 s) | **On**, but second to release-mmap |
 | `--ubatch 512` | **mainline** | protocol default | **On** (protocol) |
 | `--ngram` | **mainline** (ngram-mod, upstream PR #19164) | not measured here (+7.6% on LFM2.5) | workload-dependent |
 | `--rs-seq 64` | **fork** (seam PR #29085) | divergence-turn prefill 42.6 → 19.3 s; composes with warmup — first turn 2.6 s | **On** for served use |
@@ -151,6 +158,29 @@ session/turn latency, not decode: divergence-turn prefill **2.2× faster** (42.6
 follow-up prefill **~4× lower** (42 → 10–12 s), warmup+rs-seq composition putting T1 at
 2.6 s; the fork's decode contribution on this model is 0% by design. (The gate harness's
 warm-session 0.96 → 2.49 tok/s is substitution's warm-regime win, a bmoe-main mechanism.)
+
+**The two memory-path flags, measured separately (2026-10-02, host bench).** Three
+sequential cells, identical prompt, 256 generated tokens, `--ctx-size 8192`, on a 16 GB
+host: baseline **1.970** → `--io-two-wave` **2.280 (+15.7%)** → `--release-mmap`
+**2.490 (+26.4%)**. Both reduce major faults per token — 35.59 → 6.64 (5.4×) and →
+**0.01** — but `release-mmap` is the larger win here, the reverse of the expectation set
+by Qwen3.6 (+25.2% / +5.2%).
+
+Two reasons that reversal is real rather than noise. (a) **The mechanisms barely
+overlap**: two-wave reorders page-commit publishes in the expert path, release-mmap frees
+dense-path mappings. (b) **This is the MTP carrier**, so draft-side tensors keep mapped
+pages alive; releasing the mapping reclaimed 2434 MiB of mmap nothing was using — reclaim
+two-wave has no way to reach. It also improved prefill (49.5 → 42.9 s), which two-wave
+did not, so it pays twice on prefill-heavy one-shots.
+
+Worth recording as a method note: `--release-mmap` was predicted to be worth only +2–5%
+on POSIX, on the theory that its measured win came from Windows read serialization. That
+reasoning was wrong — on this host the win is *fault elimination* (35.59 → 0.01), not read
+serialization. The flag engaged cleanly rather than declining, despite being the MTP
+carrier. A mechanism-based prediction is not a substitute for the cell.
+
+The two flags were **not measured together**; the arithmetic sum would be ~2.8–2.9 tok/s,
+at or just under Qwen3-30B's 3.59, but that composition is unverified.
 
 ### Qwen3.6-35B-A3B (`qwen35moe` hybrid, 22.1 GB, ~2× host RAM)
 
