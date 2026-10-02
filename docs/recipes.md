@@ -42,6 +42,10 @@ architecture — decides which layer pays.
 - [LFM2.5-8B-A1B](#lfm25-8b-a1b-lfm2moe-hybrid-50-gb--fits-host-ram-comfortably)
 - [OLMoE-1B-7B](#olmoe-1b-7b-olmoe-plain-moe-40-gb--fits-host-ram-comfortably)
 
+**Cross-cutting:** [Optional flags — choosing by workload shape](#optional-flags--choosing-by-workload-shape),
+for when a flag is not simply on or off but depends on whether your workload is
+prefill- or decode-dominated.
+
 The pattern all eight establish: **past-RAM models buy bmoe-main's streaming + substitution
 (+42–70% streaming decode, +47% substitution on the best cell); fits-RAM models leave the
 stack off (−6% to −31%) and take the fork's session layer (warmup ~10–56×, follow-up
@@ -471,3 +475,49 @@ fits-RAM case, still nothing for the stack to fix. (2) fork vs bmoe-main: warmup
 (the matrix's largest), native reuse from the first follow-up, everything else correctly
 inert. The fits-RAM trio (LFM2.5, Ling-mini, OLMoE) completes the pattern with the fork
 as the only paying layer.
+
+## Optional flags — choosing by workload shape
+
+The per-model tables above answer "does this flag help *this* model". They do not answer
+"does it help *your workload*", because the matrix reports one number per flag and a
+single tok/s figure hides which side of the decode/prefill split the gain came from. That
+split is the choice this section is for: on a past-RAM cell both phases are minutes long,
+and the same flag can be a clear win for a long interactive session and a clear loss for a
+batch one-shot.
+
+**The deciding question is the prompt-to-output ratio.** Prefill is paid once per prompt
+and scales with prompt length; decode is paid per output token. A long system prompt with
+a short answer is prefill-dominated and wants the opposite tuning from a short prompt
+generating a long answer.
+
+| If the workload is… | Turn on | Turn off | Why |
+|---|---|---|---|
+| **Long prompts, short answers** (agent harnesses re-sending a big system prompt; batch scoring; `--ppl` over a document) | narrow the prefill path: keep `--ubatch 512`, add `--batch 512` above ~8k context | anything that taxes prefill | prefill is compute-bound here and dominates the wall. The output buffer scales batch × vocab — a 32k-token prompt on a ~248k vocab asks for ~30 GiB of logits and fails to reserve at all without `--batch`. |
+| **Short prompts, long answers** (chat, code completion, anything interactive) | decode-side levers: `--mtp` on a compute/DRAM-bound cell, `--n-expert-used` if the quality trade is accepted, `--release-mmap` / `--io-two-wave` on a thrash cell | — | every generated token pays the full per-token cost, so decode optimizations return per token. |
+| **Repeated prompts** (retrieval loops, template iteration, test suites) | warmup replay + `--auto-echo` (bridge), `--rs-seq` where the divergence rewind engages | — | these are the only mechanisms that pay on turn *2* onward; on a cold single-shot they are inert by design. |
+| **Repetitive or boilerplate output** | `--ngram` | — | measured prompt-dependent: +3.3% on a repetition prompt (64.5% acceptance) vs **−4.3%** on prose (5.6% draft coverage). The acceptance rate, not the flag, is the thing to check. |
+| **A model past RAM, one-shot** | the full streaming stack | `--cache-mb auto` on a host without headroom — cap it | `auto` sizes from `MemAvailable` before the `anon` dense buffers are allocated, so the cache and the dense copy over-ask together. An explicit cap (3000 MiB held swap at 3.3–3.9 GB with no OOM on a 22.5 GB model). |
+
+**Two asymmetries worth internalizing before tuning anything.**
+
+*Speculation only pays when you are not flash-bound.* `--mtp --draft 3` is **+29%** on the
+Qwen3.6-MXFP4 DRAM-bound cell and **+5.2%** on Cyber-Tiel, which the same table marks
+"flash-bound, so speculation can't pay". It is not a quality-neutral free win you can leave
+on; on a thrash cell it is close to dead weight.
+
+*Fault-reduction flags pay twice, but not equally.* On Cyber-Tiel, `--release-mmap` cut
+major faults 35.59 → 0.01/token and improved **both** phases (decode +26.4%, prefill
+49.5 → 42.9 s), while `--io-two-wave` cut faults 5.4× and left prefill slightly *worse*
+(49.5 → 53.3 s). When a flag reduces faults, check whether the phase you care about is the
+one that improved.
+
+**Flags not in this tree.** KV-cache element quantization (`--cache-type-k` /
+`--cache-type-v`) is **not on `main`** — it lives on `feat/session-residency`. When it does
+land, its trade is profile-shaped rather than model-shaped: measured there, q8_0/q8_0 halves
+the KV allocation and leaves quality flat (NLL Δ 0.002 nats at 32k, against SE 0.017), while
+giving **~11% faster decode but ~1.5× slower prefill** at a 15.3k fill — attention at fill is
+compute-bound on CPU, so it buys RAM and context length, not throughput. Whether it is worth
+it therefore depends on the same prompt-to-output ratio as the table above, and on whether the
+model's KV is actually large: the hybrid quads measure **20 KiB/token** (160 MiB at ctx 8192),
+so halving it saves ~160 MiB against a 20 GB model — marginal — whereas a full-attention model
+at 160 KiB/token pays ~5 GiB at 32k and 20 GiB at 128k, where q8 stops being optional.
