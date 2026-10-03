@@ -108,6 +108,20 @@ end-to-end proof through the real engine); decode contribution 0% by design.
 The deepest-thrash coder cell (~18% routing miss headroom) and the substitution + MTP
 carrier. The engine's headline numbers live here.
 
+**Which GGUF (weight quantization) — measured, not assumed.** The UD tiers of this
+model are the same weights at different quantization — verified from the GGUF headers (753
+tensors, identical geometry, same base repo), so they isolate weight quantization and nothing
+else. tinyMMLU-100 at `--expert-substitute 0.15`: **Q4_K_M 67/100, Q3_K_XL 64/100,
+Q2_K_XL 63/100**. That is a 4-question spread against a ±4.7-point standard error, and
+paired on the same items exact McNemar gives p=0.50 for Q4 vs Q2 — **no tier is
+distinguishable from Q4 here.** Two caveats before reading that as "just use Q2": the
+benchmark is teacher-forced single-token multiple choice and says nothing about long-form
+generation or code correctness; and although the average barely moves, **every one of the
+100 items changes its answer distribution** at each tier (the chosen answer matches Q4 on
+only 75 items at Q3 and 70 at Q2), so budget for a quarter to a third of individual answers
+to differ from the Q4 model. Q2_K_XL is 12.68 GB against Q4_K_M's 22.52 GB; what that does
+to speed and to whether the model still needs streaming on a given host is **not measured**.
+
 **Recommended recipe (single-shot / cold sessions):**
 
 ```bash
