@@ -5,7 +5,7 @@
 # gcc-aarch64-linux-gnu). CPU baseline matches the Android build: armv8.2-a + dotprod + fp16,
 # deliberately NOT i8mm — a build that pins i8mm SIGILLs during prefill on pre-2021 SoCs
 # (e.g. Snapdragon 865), while dotprod + fp16 covers every SoC that can realistically run a
-# >RAM MoE model. See docs/serve.md.
+# >RAM MoE model.
 #
 # The bundle is bmoe-arm64/: bmoe-cli + the shared libs it links, RUNPATH $ORIGIN/lib, so it
 # runs from any directory with no LD_LIBRARY_PATH, plus install.sh to put it on PATH.
@@ -93,9 +93,6 @@ BUNDLE="$ROOT/bmoe-arm64"
 rm -rf "$BUNDLE"
 mkdir -p "$BUNDLE/lib"
 cp -a "$CLI" "$BUNDLE/"
-# The bridge rides along so the bundle serves agent tooling standalone — no repo checkout
-# needed on the target; the script resolves the engine to the bmoe-cli sitting beside it.
-cp -a "$ROOT/scripts/bmoe-serve.py" "$BUNDLE/"
 cp -a "$ROOT/scripts/bundle-install.sh" "$BUNDLE/install.sh"
 chmod +x "$BUNDLE/install.sh"
 
@@ -170,8 +167,8 @@ This is NOT the Android build — Android binaries link bionic and only run on A
     ./install.sh --prefix ~/.local   # or anywhere else
     ./install.sh --uninstall
 
-`install.sh` puts the bundle in `<prefix>/lib/bmoe/` and symlinks `bmoe-cli` and `bmoe-serve.py`
-into `<prefix>/bin/`, so the libraries are never copied into a system directory. Run it straight
+`install.sh` puts the bundle in `<prefix>/lib/bmoe/` and symlinks `bmoe-cli` into
+`<prefix>/bin/`, so the libraries are never copied into a system directory. Run it straight
 from the archive instead with `./install.sh ../bmoe-arm64.tar.gz`.
 
 ## Run without installing
@@ -180,15 +177,6 @@ from the archive instead with `./install.sh ../bmoe-arm64.tar.gz`.
 
 Baseline: armv8.2-a + dotprod + fp16 (any 2018+ ARM64 SoC; no i8mm, so older SoCs do not
 SIGILL). The expert-ready hook is compiled in, so --overlap works.
-
-## Serve agent tooling (opencode or anything OpenAI-compatible)
-
-    python3 ./bmoe-serve.py --model model.gguf \
-        --port 8017 --engine-args "--chatml --moe-stream --ctx-size 8192 --ubatch 512"
-
-Requires python3 on the target, stdlib only. The bridge is bundled alongside this README and
-resolves the engine to ./bmoe-cli automatically. --ubatch 512 caps the compute-buffer
-reservation (it scales with ubatch x vocabulary); decode speed is unaffected. See docs/serve.md.
 EOF
 echo "staged: $BUNDLE"
 

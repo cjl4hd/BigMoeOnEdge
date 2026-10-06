@@ -6,287 +6,105 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-10-02 (session 22 wrap-up, addendum d).
-Phase: **merge landed and proven; KV-cache quantization shipped AND validated at
-long context; weight-quantization tiers measured; two documentation corrections
-landed — 19 gates green, version 0.27.2**. Merge commit `f3a9517` on
-`feat/session-residency`; parent-2 is upstream `374f562` (0.28.0). Submodule pin
-`dce969851` (+530 commits). The old "pos0 working-tree port" is RETIRED —
-upstream's rename is in the pin; do not stash/restore anything for pin builds.*
-*One-line status: the long-context KV-quant question is closed empirically — on a
-31.8k-token novel at `-c 32768`, q8_0/q8_0 vs f16 is ΔNLL 0.002 nats (noise,
-SE ≈ 0.017), hits 63.8% both arms; and a 15.3k-fill decode A/B shows q8 KV is a
-RAM tool, not a speed tool (decode +11%, prefill −49% — attention at fill is
-compute-bound on this CPU). Two doc corrections are also landed: the quads' KV
-geometry was **4× too high** (hybrid SSM — really 20 KiB/tok, not 80), and
-Laguna-XS's "SWA-512 long-context bargain" is **falsified** — SWA buys zero RAM
-because llama allocates those layers at full `n_ctx`, so Laguna is a genuine
-160 KiB/tok (5 GiB @ 32k, 20 GiB @ 128k f16). That, plus the default `anon` dense
-policy and `cache_auto`, is what got this host OOM-killed twice — the fix is
-config, not code. Latest: **Cyber-Tiel Q4/Q3/Q2 weight tiers measured** —
-67/64/63 of 100 on tinyMMLU, inside noise (paired McNemar p=0.50) while every
-item's distribution changes; and the bench harness no longer reports a score over
-the questions it silently dropped (`--ctx` 512 → 2048 + a hard short-cell check).*
+*Resume last rewritten: 2026-10-05 (session 23).
+Phase: **PR #211 slimmed to the arm64 bundle scripts — branch split, bridge excluded;
+cross-build NOT yet verified, nothing pushed**. One-line status: the lean PR branch
+`feat/session-residency` is `origin/main` (374f562) + one commit (`4773e28`) adding only
+`scripts/build-arm64.sh` + `scripts/bundle-install.sh`; the full session-residency history
+is preserved on local `feat/session-residency-full`; the push is deliberately held until
+the user verifies the ARM64 cross-build on this host.*
 
 ## State delta (this session)
 
-- **Merge `f3a9517`: upstream `origin/main` (0.24.0 → 0.28.0, 56 commits, 4 releases)
-  into `feat/session-residency` (8 commits ahead).** Conflict census matched the
-  pre-merge trial exactly: `CHANGELOG.md`, `CMakeLists.txt`, `README.md`,
-  `core/src/engine/session.cpp`, `docs/README.md`, `docs/telemetry.md`,
-  `examples/android/app/build.gradle`. Engine-critical overlap (`cli/main.cpp`,
-  `config.h`, `session.h`, `runtime.cpp`, `arch_registry.cpp`) auto-merged.
-- **The one semantic resolution:** upstream refactored the inline prompt-building
-  block into `detail::build_turn_inputs()` (`core/src/engine/thinking_control.cpp`);
-  upstream's helper carries everything ours did **except** the ADR-002
-  preserve-reasoning kwarg. Resolution: upstream's call + the
-  `preserve_thinking` kwarg re-added at the call site (session.cpp, after the
-  helper call). `preserve_reasoning` end-to-end (session.h field, CLI flag, bridge
-  JSON key, telemetry doc) survived the merge — `session.h`/`cli/main.cpp`
-  auto-merged.
-- **Post-merge compile fix (amended into `f3a9517`):** upstream added
-  `GenerateRequest::messages` (vector) before `n_predict`; the positional
-  `GenerateRequest{prompt, n_predict}` in `tests/moe_gates.cpp:1183` bound into the
-  wrong member. Now explicit field assignment. Only occurrence in the repo.
-- **Uncommitted `dp.pos0` edit DISCARDED, superseded:** the edit did not compile
-  against the old pin (`pos0` absent there); upstream's line 1637 already carries
-  the rename for the new pin. The PROGRESS doc's "stash the pos0 port for pin
-  builds" doctrine is obsolete as of this merge.
-- **Version fields took upstream** (`project VERSION 0.27.0`; app versionCode 43 /
-  versionName 0.28.0) — newer and monotonic; the branch's 0.24.1–0.24.3 CHANGELOG
-  sections were spliced under upstream's 0.25.0–0.28.0, reverse-chronological order
-  restored. README model table: upstream's `nemotron_h_moe` row + our `laguna` row
-  both kept. docs/README and telemetry.md: union of both sides' additions; the
-  `preserve_reasoning` key stays in the documented generate request.
-- **#29085 (`74e1ee6de`) is NOT in the new pin** — verified by ancestry check in
-  `third_party/llama.cpp`. The Next-actions playbook for it is unchanged.
-- **Smoke test of the merged engine (Next action 2, done in-session): PASS.**
-  One-shot greedy olmoe-1b-7b coherent (14.5 tok/s, 0 majflt). Three-turn session
-  on olmoe (pure attention): `n_reused` 0 → 60 → 114 with suffix-only prefills
-  (22/25 tokens) — the generic diff-reuse path works on the new pin, and a
-  `preserve_reasoning:true` request executes without error. LFM2.5 session:
-  hybrid policy behaves per design (non-append turn full-clears, `n_reused` 0;
-  turn 3 took the preserve_reasoning append path). `--version` → 0.27.0;
-  `--list-archs` carries both upstream rows (nemotron_h_moe, qwen4exp) and the
-  branch's laguna row. Note: the new pin logs per-tensor graph diagnostics on
-  stderr — cosmetic, not a failure signal.
-- **Deeper test infrastructure added same session (0.27.1): 19 ctest entries,
-  both trees green.** G19/G20 (messages + preserve_reasoning vs full-clear
-  reference, reuse asserted via `Session::hybrid_kv()` — new public probe); the
-  laguna arch row now runs the full harness (`make-tiny-moe.py --arch laguna`,
-  zero router bias like nemotron's — the G9b control is bias-blind, recorded in
-  docs/limitations.md territory); `BMOE_SANITIZE` ASan+UBSan tree (19/19; found
-  upstream ggml-rpc misaligned reference, device gates excluded there);
-  `tests/session_fuzz.py` interactive driver pins the stdin protocol contract —
-  notably `cancel` fires immediately on the reader thread, so piped bursts
-  cancel in-flight turns (by design, now documented).
-- **KV-cache quantization (same sitting, 0.27.1): `--cache-type-k/-v` shipped
-  and measured.** `RunConfig::cache_type_k/v` (+ `flash_attn` ""/on/off) →
-  `SessionConfig` → `cparams.type_k/type_v`/`flash_attn_type` at creation;
-  validate() spell-checks names; CLI forces FA on for quantized V (upstream
-  throws otherwise; AUTO resolves ON for CPU so default gates are unaffected).
-  Measured (MiMo-V2.6-9B dense, tinyMMLU-100): NLL 2.17794 f16 vs 2.17237 q8/q8
-  (noise), flips 8-for/4-against; KV alloc 64→34 MiB @2048 (llama's own buffer
-  line, linear in ctx); interleaved decode A/B at ~100 tok ctx: 0.39–0.41 s/tok
-  both arms — no short-context speed win (weights-bandwidth floor), the payoff
-  is RAM and long-context decode bytes.
-- **Long-context KV-quant validation (2026-10-01): q8 at 32k ≈ f16, measured.**
-  Pride & Prejudice corpus (31,765 scored tokens) via `--ppl` at `-c 32768
-  --ubatch 512 --batch 512`: NLL 1.49834 (f16) vs 1.49625 (q8_0/q8_0) — Δ 0.002
-  nats against SE ≈ 0.017; next-token hits 20258 vs 20273 / 31765 (63.8% both).
-  KV allocation confirmed at scale from llama's own buffer line: 1024 → 544 MiB.
-  Long-YaRN (Laguna-XS rope.scale 32) remains the one unmeasured *quality* regime
-  (its KV geometry is now measured — see the Laguna correction below).
-- **Decode at 15.3k fill (same sitting): q8 KV buys RAM, not speed — measured.**
-  Generate mode, 15,320-token prompt, `-n 16`, arms sequential: f16 prefill
-  2373 s (6.5 tok/s) / decode 0.652 s/tok vs q8 prefill 3539 s (4.3 tok/s,
-  **1.49× slower**) / decode 0.586 s/tok (**11% faster**), KV 640 → 340 MiB.
-  Attention at fill is compute-bound: 480 MiB of KV reads ≈ 28 ms by bandwidth
-  math vs ~250 ms observed, so halving bytes cannot halve decode. q8 prefill
-  pays a dequant tax in the wide batched attention (1.49× here, 1.87× at the
-  32k `--ppl` arms). Practical rule: f16 for prefill-heavy one-shots when RAM
-  allows, q8 when RAM is the binding constraint (the quads' 64k case).
-  Measured ceiling anchors (MiMo-9B, attention ∝ context, floor 0.40 s/tok):
-  32k ≈ 0.8–0.9 s/tok, 64k ≈ 1.2–1.5, 128k ≈ 2.0–2.5 (quads ~1.5–2× this
-  model's attention work, A3B expert GEMV ~0.15 s/tok on top).
-- **`--batch N` shipped (same sitting): the 32k-`--ppl` blocker fix.** The
-  one-batch-prefill doctrine (`n_batch = n_ctx`) asks for batch × vocab logits —
-  31.8k × 248k × 4 B ≈ 30 GiB — and fails with `could not reserve space for batch
-  with 31774 outputs`. `RunConfig::n_batch` (0 = doctrine) → `--batch` flag;
-  validate() rejects `n_ubatch > n_batch > 0`. Scoring is chunk-invariant.
-- **Dense A/B benchmark record (history addenda): tinyMMLU 68 vs 74, HumanEval-50
-  82.0% vs 88.0%** (MiMo-V2.6 vs Qwen3.5-9B, no-think completion regime — the
-  HumanEval gap is inside binomial noise; Qwen3.5 keeps the knowledge lead).
-  `humaneval-bench.py --dense` + stdin-close shutdown fix landed `5b955c1`.
-- **Host upgraded 12 GiB → 16 GiB DDR3** (session-side fact): the 35B-A3B quads
-  now cache-resident instead of eviction-storm.
-- **CORRECTION — the quads' KV geometry was wrong here by 4× (this doc's
-  fault, now falsified by measurement).** The old claim "qwen35moe 80–82 KiB/
-  tok f16 → 2.5 GiB at 32k" came from GGUF metadata arithmetic over ALL 40
-  blocks. `qwen35moe` is a **hybrid attention/SSM stack**: the tensor census
-  shows 40 blocks of which only **10 carry `attn_k` (full attention); 30 are
-  SSM** (`ssm_dt`/`ssm_conv1d`/`ssm_a`…). llama.cpp allocates KV only for the
-  attention layers, so llama's own buffer line reads **640.00 MiB at n_ctx
-  32768 f16 = 20 KiB/tok** — and exactly 2560 MiB at n_ctx 131072 (linear).
-  Measured identically on Qwen3.6-35B-A3B. Consequence: 64k f16 ≈ 1.25 GiB and
-  even 128k f16 ≈ 2.5 GiB fit with room to spare — the memory ceiling for
-  these quads is far higher than this doc claimed, and the binding constraint
-  at long context is attention COMPUTE, not KV RAM.
-- **CORRECTION — Laguna-XS's SWA-512 "long-context bargain" is FALSIFIED; the
-  160 KiB/tok number was right, its explanation was not.** Same faulty
-  full-attention arithmetic, but here it landed on the correct answer for the
-  wrong reason. Measured from llama's own buffer lines: n_ctx 1024 → 40 MiB
-  (non-SWA) + 120 MiB (SWA) = 160 MiB, n_ctx 32768 → 1280 MiB + 3840 MiB =
-  5120 MiB. Exactly linear, **160 KiB/tok**, so the old figure stands — but the
-  GGUF census shows why there is no bargain: 40 blocks, **all 40 full-attention**
-  (`attn_k` + `attn_v` + `attn_q_norm` + `attn_gate`), **zero SSM tensors**. And
-  llama prints `llama_kv_cache_iswa: using full-size SWA cache` — it allocates
-  the 30 SWA layers at full `n_ctx` rather than the 512-cell window, precisely
-  because truncating them breaks long-context reuse. So `sliding_window = 512`
-  buys **exactly zero** RAM here. Per-token arithmetic that predicts it with no
-  SWA term at all: 8 KV heads × 128 key length × 2 (K+V) × 2 B × 40 layers =
-  160 KiB. Unlike the quads, Laguna's ceiling really is ~5 GiB at 32k / 20 GiB
-  at 128k f16 — but the wall is still attention compute, not KV.
-- **OOM kills on this host, root-caused (two: Oct 01 23:06, Oct 02 06:12).** Not
-  a bug and not the streamer — a **budget** violation from three anon
-  allocations stacking. Both kills are `bmoe-cli` with identical
-  `total-vm: 40839128kB` and the tell `anon-rss:14399608kB, file-rss:8kB`:
-  **`file-rss: 8 kB` on an 18.9 GiB model.** Under the default
-  `--dense-weights anon` the dense set is copied O_DIRECT into *anonymous*
-  memory (reclaim-to-zram only), and default `cache_auto` sizes the expert
-  cache from `MemAvailable` *before* those dense buffers are allocated and from
-  a signal that counts the model's own mmap'd weights as free — the hazard
-  `docs/cache-sizing.md` already spells out. Add 5120 MiB of f16 KV and a
-  15.4 GiB host has no room; the kernel picks the largest anon hog and kills
-  it. (`freebuff` and `firefox` were in the table too but lost — they are
-  reclaimable file-backed; bmoe-cli won on anon badness.) The composing fix is
-  config, not code: `--cache-type-k q8_0 --cache-type-v q8_0` (measured
-  5120 → 2720 MiB), `--batch 512`, and either `--dense-weights mmap` or an
-  explicit small `--cache-mb`. Recorded in `docs/serve.md`.
+- **PR #211 slimmed 76 files → 2.** The cross-repo PR (fork head `feat/session-residency`)
+  showed the whole branch history vs main. Split: the branch name now carries only the
+  arm64 bundle scripts on top of `origin/main` (374f562 — the old branch already contained
+  it; `git rev-list --count f219afc..origin/main` = 0, so no upstream drift to absorb:
+  "sync to latest" was already satisfied by the session-22 merge). **Nothing pushed** —
+  user verifies first.
+- **Full history preserved:** local `feat/session-residency-full` = old tip `f219afc` +
+  this session's sync commit (adapted scripts + this PROGRESS rewrite). The old session-22
+  resume section is recoverable at `git show f219afc:PROGRESS.md`.
+- **Serve bridge excluded from the bundle (user decision):** every `bmoe-serve.py`
+  reference removed from both scripts — the staging cp, the installer's
+  symlink/uninstall/tar paths, the generated bundle README's serve section, and the dead
+  `docs/serve.md` pointer (that doc is branch-only; it does not exist on main). Reason:
+  the bridge drives branch-only CLI flags (`--cache-type-k/-v`, `--batch`,
+  preserve_thinking) that main's `bmoe-cli` does not have (0 hits in main's
+  `cli/main.cpp`) — shipping it would bundle a wrapper that crashes against the engine it
+  ships with. Revisit when the serve work lands on main.
+- **Deliberately NOT in the PR (user scope: "no other files"):** the `.gitignore` rows for
+  `bmoe-arm64*`, the CHANGELOG entry, `docs/serve.md` hunks from `f219afc`. The bundle
+  artifacts will therefore show untracked when building. Fold the `.gitignore` rows in
+  before the PR leaves draft (repo rule 6 owes CHANGELOG + docs at that point too).
+- **Verified pre-handoff:** `bash -n` clean on both scripts; `--help` exit 0 on both;
+  zero `serve` references left (`grep -n serve scripts/*.sh` empty); the generated README's
+  flags exist on main's CLI (`--overlap` 5 hits, `--moe-stream` 13); main's
+  `scripts/build-host.sh` confirms the output path the script expects
+  (`$BUILD_DIR/cli/bmoe-cli`); both files staged with mode 100755.
 
-## Artifacts touched (this session)
+## Artifacts touched/created
 
-| File | What |
-|---|---|
-| `core/src/engine/session.cpp` | conflict resolution: `build_turn_inputs` + `preserve_thinking` re-port |
-| `tests/moe_gates.cpp` | G18f positional-init fix (amended into the merge commit) |
-| `CHANGELOG.md`, `README.md`, `docs/README.md`, `docs/telemetry.md`, `CMakeLists.txt`, `examples/android/app/build.gradle` | conflict resolutions (see State delta) |
-| `PROGRESS.md` | this rewrite + the session-22 history entry + the 2026-10-02 Laguna/OOM addendum |
-| `docs/serve.md` | "Memory budget on the host": the KV term, why SWA does not reduce it, and the three-stacking-anon-allocations OOM mode with its `dmesg` signature |
-| `CHANGELOG.md` | clarified that long-YaRN is unmeasured for *quality* only (geometry now measured) |
-| `/tmp/progress-resume.md` | scratch splice file, deletable |
-| `third_party/llama.cpp` | working tree at new pin `dce969851` (gguf-v0.19.0-2151) |
-| `build/` | full rebuild against the new pin, green |
-
-Regeneration: none needed — everything is in the merge commit. Gates re-run:
-`(cd build && ctest --output-on-failure)`.
+- `scripts/build-arm64.sh` (196 lines), `scripts/bundle-install.sh` (202 lines) — new, on
+  both branches (identical blobs).
+- Ephemeral state in the repo root (regenerate: `scripts/build-arm64.sh --tar`; clean:
+  `rm -rf build-arm64 bmoe-arm64 bmoe-arm64.tar.gz bmoe-arm64.tar.gz.sha256`):
+  `build-arm64/` (cross-build tree), `bmoe-arm64/` + tarball + `.sha256` — leftovers from
+  an earlier run are present untracked; rebuild them after verification. The cmake
+  toolchain file is mktemp'd under /tmp and trap-cleaned by the script itself.
 
 ## Environment state
 
-- **The old pin-build ritual is DEAD:** no stash/pop dance anymore — the new pin
-  has upstream's `pos0` rename, the tree builds as committed. Resume gate 1 below
-  is the simple build+ctest now.
-- **Quality-gate datasets** `~/llm/data/`: unchanged (tinyMMLU parquet + HumanEval;
-  reader `/tmp/evalvenv`; system python is PEP-668 blocked).
-- **LFM2.5 daily driver: still DOWN** (was down for the session-21 quality gate;
-  this session did not touch the runtime). Standing recipe: `setsid nohup python3
-  -u scripts/bmoe-serve.py -m ~/llm/models/LFM2.5-8B-A1B-UD-Q4_K_M.gguf
-  --engine-args "--ctx-size 8192 --chatml" --auto-echo --port 8017 >
-  /tmp/bmoe-serve.log 2>&1 &` — then assert UP (`pgrep -f "[b]moe-serve.py"`).
-- **Swap** 8G permanent (fstab) — unchanged; majflt/tok stays the pressure sensor
-  before any perf claim.
-- **Models** `~/llm/models/`: Ling-mini-2.0, LFM2.5 UD-Q4_K_M, Qwen3.5-9B,
-  olmoe-1b-7b, Laguna-XS-2.1, Ornith-1.5, Qwen3-30B, Qwen3.6-35B, Cyber-Tiel-35B,
-  **NEW 2026-09-23: MiMo-V2.6-Distill-Qwen-9B-Q4_K_M** (5.4 GB, dense `qwen35`
-  arch — verified on the merged engine 2026-09-30: correct one-shot output,
-  session KV reuse n_reused 38 on turn 2, non-MoE dense path; benchmarked
-  against Qwen3.5-9B same day, see the session-22 benchmark addendum; no
-  registry row needed, dense `qwen35` is pure attention).
-  Also unlogged but pre-2026-07: DeepSeek-R1-Distill-Llama-8B (dense llama,
-  outside the arc's MoE scope).
-- **Remotes**: `origin` = Helldez/BigMoeOnEdge, `fork` = cjl4hd/BigMoeOnEdge (push
-  target); `gh` authed as `cjl4hd`. Submodule: `Helldez/llama.cpp` @ `dce969851`
-  (this merge). The `~/git/llama.cpp` work area still rests on `bench/host-rs` and
-  `build-bench/` still links it — but its pos0-port dependency is gone; a bench
-  rebuild against `bench/host-rs` is unaffected by this merge.
-- **`build-bench/`**: still the OLD bench build (llama `bench/host-rs`); stale
-  relative to the new pin until `bench/host-rs` itself is rebased — not needed for
-  the arc's gates, which run against `build/`.
-- Untracked, NOT ours: `.opencode/`, `bmoe-arm64*`, `opencode.json`, `.aider*`, logs.
-- Ephemeral: `/tmp/bmoe-serve.log`, `/tmp/bmoe-reqs.jsonl`, `/tmp/bf-*`,
-  `/tmp/sweep-*.txt` (regenerable per history entries).
+- Host: `aarch64-linux-gnu-g++` present (`/usr/bin`); `shellcheck` NOT installed (gates
+  are `bash -n` + `--help` + grep). Cross-built ARM64 binaries cannot be executed here —
+  the installer's `bmoe-cli --version` smoke test is advisory on this host; real validation
+  is on the ARM device (scp the tarball, `./install.sh ../bmoe-arm64.tar.gz`).
+- Remotes: `origin` = Helldez/BigMoeOnEdge (upstream), `fork` = cjl4hd/BigMoeOnEdge (PR
+  head). `fork/feat/session-residency` still points at `f219afc` until the force-push.
+- Known-untracked non-ours (never stage): `.opencode/`, `opencode.json`, `.aider*`,
+  `bmoe-arm64*` (until the .gitignore rows land).
 
 ## Open questions / blocked items
 
-1. **Stacked PR held until #197 merges** (user decision) — unchanged, but the
-   rebase step is now "rebase onto a main that contains the merge" (the branch is
-   9 commits ahead of upstream main, one of them the merge). Plan otherwise as
-   recorded in history (session 14).
-2. **PR #29085 — READY FOR REVIEW; user monitors CI.** Verified NOT in the new
-   pin. When merged: reopen #29117, submodule bump + full gates + `bmoe-rsbench
-   reserve` re-run (ADR-001 bump rule).
-3. **CPU multi-seq split-replay mismatch** (session-10): unchanged, upstream-side,
-   out of arc scope.
-4. **Shape-dependent-backend caveat** for bitwise claims: unchanged doctrine.
-5. **NEW — Android app version skew:** the branch's next release must rebase its
-   versionCode/versionName plan on the merged `build.gradle` (43 / 0.28.0);
-   a branch release before upstream's next tag would need 44 / its own version.
+- **Push is blocked on the user's build verification** (their explicit call). Until then
+  the PR still shows 76 files / draft on GitHub.
+- PR title/body still describe the fuller bundle ("installable ARM64 bundle", bridge
+  wording); consider a touch-up when marking ready.
+- Where the serve-bridge work lands on main (and whether the bundle regains it) is
+  undecided — the scripts' guard against it is removal, not a conditional.
 
 ## Next actions (ordered)
 
-1. **Long-YaRN q8-vs-f16 quality on Laguna-XS** — the one KV-quant regime still
-   unmeasured, and now the most interesting one: Laguna carries
-   `rope.scaling.factor = 32`, where quantization error compounds over a long
-   effective context, and the same model is the one where KV RAM actually binds
-   (160 KiB/tok). Run `--ppl --ppl-choices` f16 vs q8_0/q8_0 on the Pride &
-   Prejudice corpus (regen: `/tmp/pnp-clean.txt`, 31,765 scored tokens) at
-   `-c 32768 --batch 512 --ubatch 512` — **with the OOM-safe flags below**, since
-   f16 KV at 32k is 5120 MiB on a 15.4 GiB host.
-   **OOM-safe host config (mandatory on this box):**
-   `--cache-type-k q8_0 --cache-type-v q8_0 --batch 512 --ubatch 512 --cache-mb 2000`
-   — or `--dense-weights mmap` instead of the anon default. Confirm no OOM first:
-   `journalctl -k --since "-1h" | grep -a 'oom-kill'`.
-2. **Long-context cell on Qwen3.6-35B-A3B with q8 KV** — unblocked, and the
-   memory side is no longer the worry: measured 340 MiB KV at 32k q8, ~680 MiB
-   at 64k q8 (geometry corrected above — the old ~1.3 GiB figure was 4× too
-   high). Measure with `--ppl --batch 512 --ubatch 512`. The open question is
-   decode speed at fill (attention compute), not whether it fits.
-3. **q4 KV quality on the quads** — deliberately deferred, and now clearly the
-   *lower* priority of the two: it is a different risk class from q8 (README row:
-   V is the sensitive one; damage shows in recall/CoT before perplexity), it is
-   ~30 min per `--ppl` cell, and the memory case it was invented for is much less
-   urgent now that the quads are 20 KiB/tok.
-4. **Restore the LFM2.5 daily driver** (still DOWN; carried from session 21):
-   launch command in Environment state — then assert UP per the MISTAKES rule
-   (`pgrep -f "[b]moe-serve.py"`) and record the PID here.
-5. **Opencode re-test with `--auto-echo`** on a serve instance (carried from
-   session 21; the daily driver is deliberately down — model choice undecided).
-6. **Verify the `multiple-choice` skill live** (carried from session 21):
-   logprobs round-trip through the bridge, then the ~50-item demo.
-7. **#29085 playbook** (Open question 2) unchanged; when it merges: reopen
-   #29117 → bump + gates + rsbench re-run. When #197 merges: stacked-PR plan
-   (Open question 1).
-8. **Kill-process rule** (docs/MISTAKES.md): never chain `pkill -f <pat>` —
-   bracket the pattern or run standalone and assert afterwards.
+1. **User verifies the cross-build** (toolchain present): `scripts/build-arm64.sh --tar`,
+   then `./bmoe-arm64/install.sh --prefix "$HOME/.local"` and `bmoe-cli --version` (on an
+   ARM64 machine or accept the advisory note here); uninstall with
+   `./bmoe-arm64/install.sh --uninstall --prefix "$HOME/.local"`.
+2. **After verification passes:** `git fetch fork && git push fork feat/session-residency
+   --force-with-lease`, then assert
+   `gh pr view 211 --repo Helldez/BigMoeOnEdge --json changedFiles,isDraft` →
+   `{"changedFiles":2,"isDraft":true}` (draft is already set — do not mark ready).
+3. **Before leaving draft:** fold in the `.gitignore` rows for `bmoe-arm64*` (+ CHANGELOG
+   entry and serve docs when the bridge lands on main), per repo rule 6.
+4. **Resume session-residency work on `feat/session-residency-full`:** session-22 items
+   all carried (Long-YaRN q8-vs-f16 on Laguna-XS, 32k q8 cell on Qwen3.6-35B-A3B, quads
+   q4 KV, LFM2.5 daily-driver restore, opencode `--auto-echo` re-test, `multiple-choice`
+   live verify, #29085 playbook) — full detail with commands in git history:
+   `git show f219afc:PROGRESS.md` (Next actions section).
 
 ## Resume gates (all must assert positives)
 
-1. Pin build + tests (simple now — no stash dance):
-   `cmake --build build -j4 2>&1 | grep -E 'error|warning' | grep -v 'ccache not
-   found'` → empty (ccache advisory is environmental) → `cd build && ctest
-   --output-on-failure` → **19/19 passed** (18 original + session_fuzz).
-   Sanitizer check when needed: `cmake -S . -B build-san -DBMOE_SANITIZE=ON
-   -DGGML_RPC=OFF && cmake --build build-san -j4 && (cd build-san && ctest)` →
-   also 19/19.
-2. `git status -sb` → `feat/session-residency` == `fork/feat/session-residency`
-   (pushed; the workflow-scope blocker is resolved); working tree clean except
-   the known-untracked non-ours list (`.opencode/`, `bmoe-arm64*`, `opencode.json`).
-   The old "` M core/src/engine/session.cpp` expected" clause is RETIRED — the tree
-   must be CLEAN now; anything dirty: triage before working.
-3. `bash -n scripts/cellc.sh && bash -n scripts/publish-host-bench.sh && python3
-   -m py_compile scripts/bmoe-serve.py` → silent.
-4. `grep -c '<<<<<<<' CHANGELOG.md README.md docs/telemetry.md
-   core/src/engine/session.cpp` → all 0 (no conflict markers survived).
+1. Lean branch shape: `git diff --name-only origin/main feat/session-residency` → exactly
+   `scripts/build-arm64.sh` and `scripts/bundle-install.sh`; and
+   `git rev-parse feat/session-residency^` → `374f562...` (origin/main tip).
+2. Scripts sane: `bash -n scripts/build-arm64.sh && bash -n scripts/bundle-install.sh &&
+   scripts/build-arm64.sh --help > /dev/null && scripts/bundle-install.sh --help >
+   /dev/null` → exit 0; and `grep -c bmoe-serve scripts/build-arm64.sh
+   scripts/bundle-install.sh` → 0 for both.
+3. Backup intact: `git merge-base --is-ancestor f219afc feat/session-residency-full` →
+   exit 0 (all pre-split history reachable).
+4. PR shape (only after the push): `gh pr view 211 --repo Helldez/BigMoeOnEdge --json
+   changedFiles,isDraft` → `{"changedFiles":2,"isDraft":true}`. Before the push this gate
+   reads 76 — that is the expected pre-push state, not a failure of the gate itself.
 
 ---
 
@@ -1760,3 +1578,29 @@ M=~/llm/models/Cyber-Tiel-Coder-35B-A3B-MTP-UD-Q2_K_XL.gguf
   --threads 4 --cache-mb 2000 --ctx 2048
 /tmp/evalvenv/bin/python /tmp/ggufkv.py "$M"   # header keys: geometry + provenance
 ```
+
+## 2026-10-05 — Session 23: PR #211 slimmed to the arm64 bundle scripts; branch split
+
+PR #211 (cross-repo, fork head `feat/session-residency`) had ballooned to 76 files — the
+whole session-residency history against main. Split:
+
+- `feat/session-residency` rewritten in place to the lean PR branch: `origin/main`
+  (374f562 — the old branch already contained it, 0 commits behind) + one commit `4773e28`
+  adding only `scripts/build-arm64.sh` + `scripts/bundle-install.sh`. **Not pushed** —
+  the user verifies the cross-build first, then push with `--force-with-lease`.
+- Full history preserved on local `feat/session-residency-full` (old tip `f219afc` + this
+  session's sync commit carrying the adapted scripts). The session-22 resume section is
+  recoverable at `git show f219afc:PROGRESS.md`.
+- Per user decision the bundle ships bmoe-cli only: every `bmoe-serve.py` reference
+  removed from both scripts (staging cp, installer symlink/uninstall/tar paths, generated
+  README serve section, dead `docs/serve.md` pointer). Reason: the bridge drives
+  branch-only CLI flags (`--cache-type-k/-v`, `--batch`, preserve_thinking) absent from
+  main's `bmoe-cli` (0 hits in main's `cli/main.cpp`) — shipping it would bundle a wrapper
+  that crashes against the engine it ships with.
+- `.gitignore`/CHANGELOG/`docs/serve.md` hunks from `f219afc` deliberately left out of the
+  draft per user scope ("no other files as part of the PR"); owed before the PR leaves
+  draft (repo rule 6).
+- Verified pre-handoff: `bash -n` clean ×2, `--help` exit 0 ×2, zero serve references,
+  README flags (`--overlap`/`--moe-stream`) present on main's cli, build path matches
+  main's `scripts/build-host.sh` (`$BUILD_DIR/cli/bmoe-cli`), aarch64 cross toolchain
+  present on host.

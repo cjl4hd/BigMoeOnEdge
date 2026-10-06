@@ -2,12 +2,11 @@
 # Install or remove a staged bmoe-arm64 bundle.
 #
 # Ships inside the bundle next to bmoe-cli, and also works when pointed at a
-# bmoe-arm64.tar.gz. Installs the bundle to $PREFIX/lib/bmoe and puts two symlinks in
+# bmoe-arm64.tar.gz. Installs the bundle to $PREFIX/lib/bmoe and puts a symlink in
 # $PREFIX/bin, so the CLI is on PATH without copying the libraries into a system directory.
 #
-# The symlinks are what make this work: RUNPATH is $ORIGIN/lib and $ORIGIN is taken from the
-# *resolved* path of the binary, so a symlink in bin/ still finds ../lib/bmoe/lib. bmoe-serve.py
-# resolves __file__ the same way, so it finds bmoe-cli beside its real self.
+# The symlink is what makes this work: RUNPATH is $ORIGIN/lib and $ORIGIN is taken from the
+# *resolved* path of the binary, so a symlink in bin/ still finds ../lib/bmoe/lib.
 set -euo pipefail
 
 PREFIX="/usr/local"
@@ -33,9 +32,8 @@ Options:
   -h, --help     show this help
 
 Layout:
-  $PREFIX/lib/bmoe/{bmoe-cli,bmoe-serve.py,README.md,lib/}
-  $PREFIX/bin/bmoe-cli       -> ../lib/bmoe/bmoe-cli
-  $PREFIX/bin/bmoe-serve.py  -> ../lib/bmoe/bmoe-serve.py
+  $PREFIX/lib/bmoe/{bmoe-cli,README.md,lib/}
+  $PREFIX/bin/bmoe-cli  -> ../lib/bmoe/bmoe-cli
 
 Examples:
   ./install.sh                          # from an extracted bundle
@@ -132,7 +130,7 @@ do_uninstall() {
     echo "Uninstalling $PKG from $PREFIX"
     local removed=0
     local name target path
-    for name in bmoe-cli bmoe-serve.py; do
+    for name in bmoe-cli; do
         path="$PREFIX/bin/$name"
         target="../$DEST_SUBDIR/$name"
         if [ -L "$path" ] && [ "$(readlink "$path")" = "$target" ]; then
@@ -169,20 +167,17 @@ do_install() {
 
     mkdir -p "$PREFIX/bin"
     check_bin_entry "$PREFIX/bin/bmoe-cli" "../$DEST_SUBDIR/bmoe-cli"
-    check_bin_entry "$PREFIX/bin/bmoe-serve.py" "../$DEST_SUBDIR/bmoe-serve.py"
 
     # Replace the tree wholesale: copying over a previous install can leave behind libraries
     # from an older llama.cpp whose sonames no longer exist in this build.
     rm -rf "$dest"
     mkdir -p "$dest"
-    cp -a "$SRC/bmoe-cli" "$SRC/bmoe-serve.py" "$SRC/lib" "$dest/"
+    cp -a "$SRC/bmoe-cli" "$SRC/lib" "$dest/"
     [ -f "$SRC/README.md" ] && cp -a "$SRC/README.md" "$dest/"
     note "installed $dest"
 
     ln -sfn "../$DEST_SUBDIR/bmoe-cli" "$PREFIX/bin/bmoe-cli"
-    ln -sfn "../$DEST_SUBDIR/bmoe-serve.py" "$PREFIX/bin/bmoe-serve.py"
     note "linked $PREFIX/bin/bmoe-cli"
-    note "linked $PREFIX/bin/bmoe-serve.py"
 
     # Smoke test the install on this machine. It is advisory: the install is correct even when
     # this fails, which is exactly the case when the bundle is staged on an x86 host for an
