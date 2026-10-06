@@ -83,10 +83,11 @@ one-feature PRs.*
 
 ## Next actions (ordered)
 
-1. **Before marking PR #211 ready:** fold in the `.gitignore` rows for `bmoe-arm64*` +
-   a CHANGELOG entry (repo rule 6); the user ticks the PR's on-device checklist
-   (install, `bmoe-cli --version`, `--moe-stream` generation) in the PR body, then
-   flips the draft.
+1. **PR #211 is READY (author flipped the draft 2026-10-05, after ticking the on-device
+   checklist on GitHub).** The `.gitignore` rows for `bmoe-arm64*` + a CHANGELOG entry
+   (repo rule 6) never landed — fold them in as a follow-up commit on
+   `feat/session-residency` if wanted. The PR body's Overview was also reworked to a
+   defect-free two-file description at the author's request.
 2. **Build the PR slicing map** (ordered per-feature cherry-pick plan) into this
    section, then start carving: engine flags (`--cache-type-k/-v` `06616ca`, `--batch`
    `761dc88`) → session-reuse core + ADRs → serve bridge (needs the flags) → bench
@@ -108,9 +109,9 @@ one-feature PRs.*
    scripts/bundle-install.sh` → 0 for both.
 3. Backup intact: `git merge-base --is-ancestor f219afc feat/session-residency-full` →
    exit 0 (all pre-split history reachable).
-4. PR shape (only after the push): `gh pr view 211 --repo Helldez/BigMoeOnEdge --json
-   changedFiles,isDraft` → `{"changedFiles":2,"isDraft":true}`. Before the push this gate
-   reads 76 — that is the expected pre-push state, not a failure of the gate itself.
+4. PR shape: `gh pr view 211 --repo Helldez/BigMoeOnEdge --json changedFiles,isDraft`
+   → `{"changedFiles":2,"isDraft":false}` (ready; author-flipped 2026-10-05) and title
+   `feat(build): ARM64 cross-build script + self-contained bundle installer`.
 
 ---
 
@@ -1635,3 +1636,11 @@ serve-bridge references were removed and the CLI-only scope stated (the first ed
 attempt via `gh pr edit` failed on GitHub's Projects-classic GraphQL deprecation —
 REST PATCH worked). Trunk pushed to the fork as `feat/session-residency-full`;
 feature and benchmark work continues there, carved into one-feature PRs.
+
+PR #211 ready (2026-10-05, same day): the author ticked the on-device checklist and
+flipped the draft to ready on GitHub; the body's Overview was rewritten to a defect-free
+description of the two added files, the AI-disclosure line now states the author
+reviewed the result on ARM64 hardware, and the submitter-reminder blockquote was
+removed (REST PATCH; note GitHub adds one blank line between the overview bullets on
+store). The .gitignore/CHANGELOG hygiene from repo rule 6 has not landed — follow-up
+commit if wanted.
