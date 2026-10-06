@@ -6,14 +6,14 @@ the long-form evidence narrative; entries are never rewritten, only falsified ex
 by newer entries. Trust hierarchy: resume section > history > older sections of either.
 Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git log`.
 
-*Resume last rewritten: 2026-10-05 (session 23).
-Phase: **PR #211 slimmed to the arm64 bundle scripts — branch split, bridge excluded;
-host cross-build + installer verified end-to-end; push still held for user
-verification**. One-line status: the lean PR branch `feat/session-residency` is
-`origin/main` (374f562) + one commit (`79ceab9`, amended in-session) adding only
-`scripts/build-arm64.sh` + `scripts/bundle-install.sh`; the full session-residency history
-is preserved on local `feat/session-residency-full`; the push is deliberately held until
-the user's own verification pass.*
+*Resume last rewritten: 2026-10-05 (session 23, close).
+Phase: **PR #211 pushed — 2 files, draft, retitled `feat(build)`; trunk backed up to
+fork**. One-line status: the lean PR branch `feat/session-residency` is `origin/main`
+(374f562) + one commit (`79ceab9`) adding only `scripts/build-arm64.sh` +
+`scripts/bundle-install.sh`; the user verified the build on their ARM64 machine; the
+full session-residency trunk is preserved locally AND on the fork as
+`feat/session-residency-full` — features and benchmarks continue there, carved into
+one-feature PRs.*
 
 ## State delta (this session)
 
@@ -21,8 +21,11 @@ the user's own verification pass.*
   showed the whole branch history vs main. Split: the branch name now carries only the
   arm64 bundle scripts on top of `origin/main` (374f562 — the old branch already contained
   it; `git rev-list --count f219afc..origin/main` = 0, so no upstream drift to absorb:
-  "sync to latest" was already satisfied by the session-22 merge). **Nothing pushed** —
-  user verifies first.
+  "sync to latest" was already satisfied by the session-22 merge). **Pushed 2026-10-05**
+  (force-with-lease, `f219afc → 79ceab9`) after the user's on-device verification; PR
+  retitled `feat(build): ARM64 cross-build script + self-contained bundle installer`,
+  body's serve-bridge references removed (first `gh pr edit` died on GitHub's
+  Projects-classic GraphQL deprecation — REST PATCH worked).
 - **Full history preserved:** local `feat/session-residency-full` = old tip `f219afc` +
   this session's sync commit (adapted scripts + this PROGRESS rewrite). The old session-22
   resume section is recoverable at `git show f219afc:PROGRESS.md`.
@@ -72,30 +75,27 @@ the user's own verification pass.*
 
 ## Open questions / blocked items
 
-- **Push is blocked on the user's build verification** (their explicit call). Until then
-  the PR still shows 76 files / draft on GitHub.
-- PR title/body still describe the fuller bundle ("installable ARM64 bundle", bridge
-  wording); consider a touch-up when marking ready.
+- **Before the PR leaves draft (repo rule 6):** fold in the `.gitignore` rows for
+  `bmoe-arm64*` + a CHANGELOG entry; the user ticks the on-device checklist in the PR
+  body, then flips the draft.
 - Where the serve-bridge work lands on main (and whether the bundle regains it) is
   undecided — the scripts' guard against it is removal, not a conditional.
 
 ## Next actions (ordered)
 
-1. **User re-verifies the cross-build** (host run already passed in-session):
-   `scripts/build-arm64.sh --tar`, then `./bmoe-arm64/install.sh --prefix
-   "$HOME/.local"` (exit 0 expected; the `--version` smoke line is advisory on x86 —
-   real binary validation is on the ARM device via the tarball).
-2. **After verification passes:** `git fetch fork && git push fork feat/session-residency
-   --force-with-lease`, then assert
-   `gh pr view 211 --repo Helldez/BigMoeOnEdge --json changedFiles,isDraft` →
-   `{"changedFiles":2,"isDraft":true}` (draft is already set — do not mark ready).
-3. **Before leaving draft:** fold in the `.gitignore` rows for `bmoe-arm64*` (+ CHANGELOG
-   entry and serve docs when the bridge lands on main), per repo rule 6.
-4. **Resume session-residency work on `feat/session-residency-full`:** session-22 items
-   all carried (Long-YaRN q8-vs-f16 on Laguna-XS, 32k q8 cell on Qwen3.6-35B-A3B, quads
-   q4 KV, LFM2.5 daily-driver restore, opencode `--auto-echo` re-test, `multiple-choice`
-   live verify, #29085 playbook) — full detail with commands in git history:
-   `git show f219afc:PROGRESS.md` (Next actions section).
+1. **Before marking PR #211 ready:** fold in the `.gitignore` rows for `bmoe-arm64*` +
+   a CHANGELOG entry (repo rule 6); the user ticks the PR's on-device checklist
+   (install, `bmoe-cli --version`, `--moe-stream` generation) in the PR body, then
+   flips the draft.
+2. **Build the PR slicing map** (ordered per-feature cherry-pick plan) into this
+   section, then start carving: engine flags (`--cache-type-k/-v` `06616ca`, `--batch`
+   `761dc88`) → session-reuse core + ADRs → serve bridge (needs the flags) → bench
+   harness as a tooling PR.
+3. **Resume feature/benchmark work on this branch** (session-22 items carried —
+   Long-YaRN q8-vs-f16 on Laguna-XS, 32k q8 cell on Qwen3.6-35B-A3B, quads q4 KV,
+   LFM2.5 daily-driver restore, opencode `--auto-echo` re-test, `multiple-choice` live
+   verify, #29085 playbook) — full detail with commands: `git show f219afc:PROGRESS.md`
+   (Next actions section).
 
 ## Resume gates (all must assert positives)
 
@@ -1626,3 +1626,12 @@ PR commit was amended twice during the fix (4773e28 → 27f82e0 → 79ceab9 — 
 hash carried a broken comment line caught by the same install test). After the fix:
 build exit 0 again and all four installer paths (directory/tarball × install/uninstall)
 exit 0.
+
+Push close-out (2026-10-05, session 23): the user verified the build on their ARM64
+machine; the lean branch force-pushed to the fork (`f219afc → 79ceab9`,
+--force-with-lease). PR #211 now shows 2 files, draft, retitled
+`feat(build): ARM64 cross-build script + self-contained bundle installer`; the body's
+serve-bridge references were removed and the CLI-only scope stated (the first edit
+attempt via `gh pr edit` failed on GitHub's Projects-classic GraphQL deprecation —
+REST PATCH worked). Trunk pushed to the fork as `feat/session-residency-full`;
+feature and benchmark work continues there, carved into one-feature PRs.
