@@ -65,7 +65,9 @@ while [ "$PREFIX" != "/" ] && [ "${PREFIX%/}" != "$PREFIX" ]; do PREFIX="${PREFI
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-cleanup() { [ -n "$TMPDIR_CREATED" ] && rm -rf "$TMPDIR_CREATED"; }
+# The EXIT trap's status becomes the script's on the natural-exit paths, so the no-tarball
+# case must not fail the test — otherwise a successful install exits 1.
+cleanup() { [ -z "$TMPDIR_CREATED" ] || rm -rf "$TMPDIR_CREATED"; }
 trap cleanup EXIT
 
 # A bundle is valid only if it has the binary and a populated lib/ — checking up front means a

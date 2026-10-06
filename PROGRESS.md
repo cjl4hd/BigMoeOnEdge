@@ -8,11 +8,12 @@ Log opened 2026-09-18; earlier project history lives in `CHANGELOG.md` and `git 
 
 *Resume last rewritten: 2026-10-05 (session 23).
 Phase: **PR #211 slimmed to the arm64 bundle scripts — branch split, bridge excluded;
-cross-build NOT yet verified, nothing pushed**. One-line status: the lean PR branch
-`feat/session-residency` is `origin/main` (374f562) + one commit (`4773e28`) adding only
+host cross-build + installer verified end-to-end; push still held for user
+verification**. One-line status: the lean PR branch `feat/session-residency` is
+`origin/main` (374f562) + one commit (`79ceab9`, amended in-session) adding only
 `scripts/build-arm64.sh` + `scripts/bundle-install.sh`; the full session-residency history
 is preserved on local `feat/session-residency-full`; the push is deliberately held until
-the user verifies the ARM64 cross-build on this host.*
+the user's own verification pass.*
 
 ## State delta (this session)
 
@@ -37,11 +38,16 @@ the user verifies the ARM64 cross-build on this host.*
   `bmoe-arm64*`, the CHANGELOG entry, `docs/serve.md` hunks from `f219afc`. The bundle
   artifacts will therefore show untracked when building. Fold the `.gitignore` rows in
   before the PR leaves draft (repo rule 6 owes CHANGELOG + docs at that point too).
-- **Verified pre-handoff:** `bash -n` clean on both scripts; `--help` exit 0 on both;
-  zero `serve` references left (`grep -n serve scripts/*.sh` empty); the generated README's
-  flags exist on main's CLI (`--overlap` 5 hits, `--moe-stream` 13); main's
-  `scripts/build-host.sh` confirms the output path the script expects
-  (`$BUILD_DIR/cli/bmoe-cli`); both files staged with mode 100755.
+- **Verified pre-handoff (static):** `bash -n` clean on both scripts; `--help` exit 0 on
+  both; zero `serve` references left; the generated README's flags exist on main's CLI
+  (`--overlap` 5 hits, `--moe-stream` 13); main's `scripts/build-host.sh` confirms the
+  output path the script expects (`$BUILD_DIR/cli/bmoe-cli`); mode 100755.
+- **Verified by running it (same session):** `scripts/build-arm64.sh --tar` → exit 0;
+  bundle is aarch64 ELF, RUNPATH `[$ORIGIN/lib]` only, NEEDED closure complete (5 bundled
+  sonames; 5 system libs correctly excluded), symlink chains intact, no `bmoe-serve.py`
+  in bundle/tarball/README, bundled `install.sh` byte-identical to source, sha256 OK,
+  tarball 4.4 MB. Install/uninstall via directory AND tarball all exit 0 (the directory
+  path initially exited 1 — EXIT-trap bug, see history addendum).
 
 ## Artifacts touched/created
 
@@ -75,10 +81,10 @@ the user verifies the ARM64 cross-build on this host.*
 
 ## Next actions (ordered)
 
-1. **User verifies the cross-build** (toolchain present): `scripts/build-arm64.sh --tar`,
-   then `./bmoe-arm64/install.sh --prefix "$HOME/.local"` and `bmoe-cli --version` (on an
-   ARM64 machine or accept the advisory note here); uninstall with
-   `./bmoe-arm64/install.sh --uninstall --prefix "$HOME/.local"`.
+1. **User re-verifies the cross-build** (host run already passed in-session):
+   `scripts/build-arm64.sh --tar`, then `./bmoe-arm64/install.sh --prefix
+   "$HOME/.local"` (exit 0 expected; the `--version` smoke line is advisory on x86 —
+   real binary validation is on the ARM device via the tarball).
 2. **After verification passes:** `git fetch fork && git push fork feat/session-residency
    --force-with-lease`, then assert
    `gh pr view 211 --repo Helldez/BigMoeOnEdge --json changedFiles,isDraft` →
@@ -1604,3 +1610,19 @@ whole session-residency history against main. Split:
   README flags (`--overlap`/`--moe-stream`) present on main's cli, build path matches
   main's `scripts/build-host.sh` (`$BUILD_DIR/cli/bmoe-cli`), aarch64 cross toolchain
   present on host.
+
+Addendum (same session, later — host verification + one real bug):
+
+`scripts/build-arm64.sh --tar` run on this host: SCRIPT_EXIT=0; bundle verified
+(aarch64 ELF, RUNPATH `[$ORIGIN/lib]` only, NEEDED closure complete — 5 bundled sonames,
+5 system libs correctly excluded, symlink chains intact, no bmoe-serve.py in
+bundle/tarball/README, bundled install.sh byte-identical to source, sha256 OK, 4.4 MB
+tarball). The install-path test then caught a real bug the static gates missed: every
+successful directory install/uninstall exited 1 — cleanup() ended in a failing
+`[ -n "$TMPDIR_CREATED" ]` test, and the EXIT trap's status becomes the script's on the
+natural-exit paths (`--help` was unaffected because it exits explicitly; the trap
+semantics were reproduced standalone before fixing). Fixed with `[ -z ] || rm -rf`; the
+PR commit was amended twice during the fix (4773e28 → 27f82e0 → 79ceab9 — the middle
+hash carried a broken comment line caught by the same install test). After the fix:
+build exit 0 again and all four installer paths (directory/tarball × install/uninstall)
+exit 0.
